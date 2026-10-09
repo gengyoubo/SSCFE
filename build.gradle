@@ -36,6 +36,12 @@ minecraft {
         }
         gameTestServer {
             property 'forge.enabledGameTestNamespaces', mod_id
+            workingDirectory project.file('build/gametest-run')
+            mods {
+                "${mod_id}" {
+                    source sourceSets.test
+                }
+            }
         }
         data {
             workingDirectory project.file('run-data')
@@ -45,8 +51,19 @@ minecraft {
 }
 sourceSets.main.resources { srcDir 'src/generated/resources' }
 repositories {
+    maven {
+        name = 'Curios'
+        url = 'https://maven.theillusivec4.top/'
+        content { includeGroup 'top.theillusivec4.curios' }
+    }
     flatDir {
         dirs 'lib'
+    }
+    maven {
+        url "https://cursemaven.com"
+        content {
+            includeGroup "curse.maven"
+        }
     }
     // Use the sibling core project's published Maven repository while developing locally.
     // The GitHub repository below remains the normal source for clean checkouts.
@@ -69,7 +86,10 @@ repositories {
 }
 dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
-    implementation fg.deobf("net.onixary:shape_shifter_curse:${project.shape_shifter_curse_version}")
+
+    implementation fg.deobf("curse.maven:shape-shifter-curse-forge-1683902:9104450")
+    implementation fg.deobf("curse.maven:jei-238222:9058038")
+    implementation fg.deobf("top.theillusivec4.curios:curios-forge:5.9.1+1.20.1")
     implementation fg.deobf("software.bernie.geckolib:geckolib-forge-${project.minecraft_version}:${project.geckolib_version}")
     annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
 }
@@ -100,15 +120,19 @@ tasks.named('processResources', ProcessResources).configure {
 
 // ForgeGradle exposes the add-on source as a dev mod, but does not always make external
 // mod dependencies visible to FML's mod-file scan when runClient is launched from this
-// standalone project. Stage only the two actual mod dependencies into the dev game directory.
+// standalone project. Stage the actual mod dependencies into the dev game directory.
 tasks.register('stageDevModDependencies', Copy) {
     from configurations.runtimeClasspath.filter { file ->
         file.name.contains('shape_shifter_curse') || file.name.startsWith('geckolib-forge-')
+                || file.name.startsWith('curios-forge-')
     }
     into file('run/mods')
 }
 
 tasks.configureEach {
+    if (name == 'runGameTestServer') {
+        dependsOn 'testClasses'
+    }
     if (name == 'runClient') {
         dependsOn 'classes', 'processResources', 'stageDevModDependencies'
     }

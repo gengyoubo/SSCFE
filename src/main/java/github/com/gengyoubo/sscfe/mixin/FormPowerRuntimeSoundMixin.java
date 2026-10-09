@@ -1,10 +1,6 @@
 package github.com.gengyoubo.sscfe.mixin;
 
 import github.com.gengyoubo.sscfe.sound.FormSoundVolumePolicy;
-import net.minecraft.core.BlockPos;
-import net.minecraft.sounds.SoundEvent;
-import net.minecraft.sounds.SoundSource;
-import net.minecraft.world.entity.player.Player;
 import net.onixary.shapeShifterCurseForge.power.FormPowerRuntime;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -18,11 +14,11 @@ public abstract class FormPowerRuntimeSoundMixin {
             at = @At(
                     value = "INVOKE",
                     target = "Lnet/minecraft/world/level/Level;playSound(Lnet/minecraft/world/entity/player/Player;"
-                            + "Lnet/minecraft/core/BlockPos;Lnet/minecraft/sounds/SoundEvent;"
+                            + "DDDLnet/minecraft/sounds/SoundEvent;"
                             + "Lnet/minecraft/sounds/SoundSource;FF)V",
-                    remap = false
+                    remap = true
             ),
-            index = 4,
+            index = 6,
             remap = false
     )
     private static float sscfe$increasePowerSoundVolume(float volume) {

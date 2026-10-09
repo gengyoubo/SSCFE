@@ -5,6 +5,10 @@
   "compatibilityLevel": "JAVA_17",
   "refmap": "sscfe.refmap.json",
   "mixins": [
+    "AxolotlMoistureMixin",
+    "MorphscaleArmorRepairMixin",
+    "MoonAdaptationArmorMixin",
+    "EdibleMoondustMixin",
     "MobGoalSelectorAccessor",
     "FormPowerRuntimeSoundMixin",
     "FormPowerRuntimeAccessoryGuardMixin",

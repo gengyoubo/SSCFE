@@ -816,5 +816,21 @@
   "power.shape-shifter-curse.form_spider_3_mana_attack_cocooned_enemy.name": "蜘蛛·最终阶段·魔力攻击被蛛网缠绕敌对",
   "power.shape-shifter-curse.form_spider_3_mana_attack_cocooned_enemy.description": "攻击命中目标时触发自身效果。",
   "power.shape-shifter-curse.form_spider_3_step_sound_speed_up.name": "蜘蛛·最终阶段·脚步声音速度提升",
-  "power.shape-shifter-curse.form_spider_3_step_sound_speed_up.description": "脚步声触发频率提高至 1.5 倍。"
+  "power.shape-shifter-curse.form_spider_3_step_sound_speed_up.description": "脚步声触发频率提高至 1.5 倍。",
+  "item.sscfe.wet_moondust": "湿润的月之尘",
+  "item.sscfe.tank_core": "储罐核心",
+  "item.sscfe.moisturizer": "保湿剂",
+  "item.sscfe.large_water_tank": "大储罐",
+  "block.sscfe.large_water_tank": "大储罐",
+  "item.sscfe.water_as_food": "以水为食",
+  "tooltip.sscfe.water_storage": "储水：%s / %s mB",
+  "tooltip.sscfe.water_storage.fill": "另一只手持水桶/空桶，空中右键注水/取水",
+  "item.sscfe.moisturizer.tooltip": "美西螈形态·腰带：水中自动补满；陆地每秒耗水 2 mB，有水时保持湿润度",
+  "item.sscfe.large_water_tank.tooltip": "美西螈形态·背部：移动速度 -10%；为保湿剂供水。可放置并连接流体管道",
+  "item.sscfe.water_as_food.tooltip": "美西螈形态·护符：饥饿时每秒消耗 1 点湿润度，恢复 1 点饥饿值和 1 点饱和度",
+  "jei.sscfe.moondust_armor_repair": "塑形盔甲和下界合金塑形盔甲可在铁砧中使用未加工的月之尘修复。每份最多恢复最大耐久的四分之一，保留已有附魔，并按铁砧规则消耗经验。原有修复材料仍可使用。",
+  "enchantment.sscfe.moon_adaptation": "月之适配",
+  "item.sscfe.edible_moondust": "可食用月尘",
+  "jei.sscfe.moon_adaptation": "将一本书、一个塑形核心和七份未加工的月之尘无序合成为月之适配附魔书。在铁砧中应用于盔甲或鞘翅后，装备可无视形态穿戴限制，并使用未加工的月之尘修复。每份月之尘最多修复最大耐久的四分之一。等级上限为 I，可与已有附魔共存。",
+  "jei.sscfe.edible_moondust": "按食物/月之尘交替排列：XYX / YXY / XYX（X 为任意食物，Y 为未加工的月之尘），合成五份。所有形态均可食用，不受本能饮食限制，每份恢复 3 点饥饿值和 3 点饱和度。"
 }

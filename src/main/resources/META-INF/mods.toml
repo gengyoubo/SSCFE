@@ -27,7 +27,7 @@ side="BOTH"
 [[dependencies.${mod_id}]]
 modId="shape_shifter_curse"
 mandatory=true
-versionRange="[1.9.3.14,1.10)"
+versionRange="[1.9.3.16,1.10)"
 ordering="AFTER"
 side="BOTH"
 
@@ -35,5 +35,12 @@ side="BOTH"
 modId="geckolib"
 mandatory=true
 versionRange="[4.8.0,)"
+ordering="AFTER"
+side="BOTH"
+
+[[dependencies.${mod_id}]]
+modId="curios"
+mandatory=false
+versionRange="[5.9.1,6)"
 ordering="AFTER"
 side="BOTH"

@@ -1,0 +1,23 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "XYX",
+    "XZX",
+    "XYX"
+  ],
+  "key": {
+    "X": {
+      "item": "minecraft:iron_ingot"
+    },
+    "Z": {
+      "item": "sscfe:tank_core"
+    },
+    "Y": {
+      "item": "sscfe:wet_moondust"
+    }
+  },
+  "result": {
+    "item": "sscfe:water_as_food"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "YXY",
+    "YXY",
+    "YXY"
+  ],
+  "key": {
+    "X": {
+      "item": "sscfe:tank_core"
+    },
+    "Y": {
+      "item": "minecraft:netherite_scrap"
+    }
+  },
+  "result": {
+    "item": "sscfe:large_water_tank"
+  }
+}

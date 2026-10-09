@@ -21,16 +21,7 @@ public abstract class FormActivePowerSoundResponseMixin {
         }
     }
 
-    @Inject(method = "triggerHiss", at = @At("HEAD"), remap = false)
-    private static void sscfe$beginHissCall(ServerPlayer player, CallbackInfoReturnable<Boolean> cir) {
-        FormSoundVolumePolicy.beginPlayerCall();
-    }
-
-    @Inject(method = "triggerHiss", at = @At("TAIL"), remap = false)
-    private static void sscfe$respondToHiss(ServerPlayer player, CallbackInfoReturnable<Boolean> cir) {
-        FormSoundVolumePolicy.endPlayerCall();
-    }
-
+    // Since core 1.9.3.16, hissing is a data-driven make_sound action too.
     @Inject(method = "triggerActive", at = @At("HEAD"), remap = false)
     private static void sscfe$beginSoundCall(ServerPlayer player, String key,
                                               CallbackInfoReturnable<Boolean> cir) {
@@ -39,7 +30,7 @@ public abstract class FormActivePowerSoundResponseMixin {
         }
     }
 
-    @Inject(method = "triggerActive", at = @At("TAIL"), remap = false)
+    @Inject(method = "triggerActive", at = @At("RETURN"), remap = false)
     private static void sscfe$respondToMakeSound(ServerPlayer player, String key,
                                                   CallbackInfoReturnable<Boolean> cir) {
         if ("key.shape-shifter-curse.make_sound".equals(key)) {

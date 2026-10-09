@@ -1,0 +1,20 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    " Y ",
+    "YXY",
+    " Y "
+  ],
+  "key": {
+    "X": {
+      "item": "shape-shifter-curse:untreated_moondust"
+    },
+    "Y": {
+      "item": "minecraft:water_bucket"
+    }
+  },
+  "result": {
+    "item": "sscfe:wet_moondust"
+  }
+}

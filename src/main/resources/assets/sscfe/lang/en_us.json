@@ -22,5 +22,21 @@
   "power.shape-shifter-curse.form_axolotl_3_water_breathing.name": "Water Breathing",
   "power.shape-shifter-curse.form_axolotl_3_water_breathing.description": "Greatly increases how long you can breathe underwater.",
   "power.shape-shifter-curse.form_axolotl_3_slipperiness.name": "Sprint Glide",
-  "power.shape-shifter-curse.form_axolotl_3_slipperiness.description": "When the conditions are met, ground friction increases by 0.35."
+  "power.shape-shifter-curse.form_axolotl_3_slipperiness.description": "When the conditions are met, ground friction increases by 0.35.",
+  "item.sscfe.wet_moondust": "Wet Moondust",
+  "item.sscfe.tank_core": "Tank Core",
+  "item.sscfe.moisturizer": "Moisturizer",
+  "item.sscfe.large_water_tank": "Large Water Tank",
+  "block.sscfe.large_water_tank": "Large Water Tank",
+  "item.sscfe.water_as_food": "Water as Food",
+  "tooltip.sscfe.water_storage": "Water: %s / %s mB",
+  "tooltip.sscfe.water_storage.fill": "Hold a water/empty bucket in the other hand; right-click in air to fill/drain",
+  "item.sscfe.moisturizer.tooltip": "Axolotl form, belt: refills in water; uses 2 mB/s on land to preserve moisture",
+  "item.sscfe.large_water_tank.tooltip": "Axolotl form, back: -10% movement speed; supplies the moisturizer. Place to connect fluid pipes",
+  "item.sscfe.water_as_food.tooltip": "Axolotl form, charm: when hungry, spend 1 moisture each second for 1 hunger and 1 saturation",
+  "jei.sscfe.moondust_armor_repair": "Morphscale and Netherite Morphscale armor can be repaired with Untreated Moondust in an anvil. Each piece of moondust restores up to one quarter of maximum durability, preserves enchantments, and costs experience under normal anvil rules. Original repair materials still work.",
+  "enchantment.sscfe.moon_adaptation": "Moon Adaptation",
+  "item.sscfe.edible_moondust": "Edible Moondust",
+  "jei.sscfe.moon_adaptation": "Shapelessly craft one book, one Morphscale Core, and seven Untreated Moondust into a Moon Adaptation enchanted book. Apply it to armor or elytra in an anvil to bypass form equipment restrictions and allow repairs with Untreated Moondust. Each moondust repairs up to one quarter of maximum durability. Maximum level: I. Compatible with existing enchantments.",
+  "jei.sscfe.edible_moondust": "Craft five with XYX / YXY / XYX, where X is any food and Y is Untreated Moondust. All forms can eat it regardless of instinctive dietary restrictions. Each serving restores 3 hunger and 3 saturation."
 }

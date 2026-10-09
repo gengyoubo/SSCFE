@@ -1,0 +1,20 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "YXY",
+    "XXX",
+    "XYX"
+  ],
+  "key": {
+    "X": {
+      "item": "minecraft:bucket"
+    },
+    "Y": {
+      "item": "minecraft:iron_ingot"
+    }
+  },
+  "result": {
+    "item": "sscfe:tank_core"
+  }
+}
