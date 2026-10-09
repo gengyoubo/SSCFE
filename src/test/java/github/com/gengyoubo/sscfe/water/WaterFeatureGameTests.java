@@ -42,6 +42,86 @@ import java.util.UUID;
 @PrefixGameTestTemplate(false)
 public final class WaterFeatureGameTests {
     @GameTest(template = "empty")
+    public static void purplePenetratesThreeMonsters(GameTestHelper helper) {
+        var level = helper.getLevel();
+        ServerPlayer player = new net.minecraftforge.common.util.FakePlayer(level,
+                new GameProfile(UUID.randomUUID(), "piercing-purple-test"));
+        Vec3 eyes = Vec3.atCenterOf(helper.absolutePos(BlockPos.ZERO).atY(220));
+        Vec3 direction = new Vec3(0, 1, 0);
+        Vec3 origin = WaterPurpleRules.chargeOrigin(eyes, direction, 12D);
+        player.setPos(eyes.x, eyes.y - player.getEyeHeight(), eyes.z);
+        player.getAbilities().mayBuild = false;
+        var targets = new java.util.ArrayList<net.minecraft.world.entity.monster.Husk>();
+        try {
+            for (int distance : new int[]{20, 40, 60}) {
+                var target = net.minecraft.world.entity.EntityType.HUSK.create(level);
+                helper.assertTrue(target != null, "Piercing test target exists");
+                target.setNoAi(true); target.setNoGravity(true); target.setHealth(1F);
+                target.setPos(origin.x, origin.y + distance, origin.z);
+                level.addFreshEntity(target); targets.add(target);
+            }
+            var beam = new WaterCurseService.Beam(player, level, origin, direction, 60);
+            for (int tick = 1; tick <= 12; tick++) {
+                helper.assertTrue(!beam.tick(8192), "Hitting or killing a monster never ends projectile flight");
+                if (tick == 4) helper.assertTrue(!targets.get(0).isAlive()
+                        && targets.get(1).isAlive() && targets.get(2).isAlive(),
+                        "The first monster dies while the two later targets remain untouched");
+                if (tick == 8) helper.assertTrue(!targets.get(1).isAlive() && targets.get(2).isAlive(),
+                        "The projectile continues to kill the second monster");
+            }
+            helper.assertTrue(!targets.get(2).isAlive(), "The same projectile reaches and kills the third monster");
+            for (int tick = 13; tick < 60; tick++) helper.assertTrue(!beam.tick(8192),
+                    "The projectile continues beyond the monsters until maximum range");
+            helper.assertTrue(beam.tick(8192), "Only reaching the range limit completes this projectile");
+        } finally {
+            targets.forEach(net.minecraft.world.entity.Entity::discard);
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 100)
+    public static void purpleChargeAndReleaseShareConfiguredOrigin(GameTestHelper helper) throws Exception {
+        ServerPlayer player = new net.minecraftforge.common.util.FakePlayer(helper.getLevel(),
+                new GameProfile(UUID.randomUUID(), "purple-origin-test")) {
+            @Override public boolean isCreative() { return true; }
+        };
+        var charm = new ItemStack(ModWaterContent.WATER_CURSE.get());
+        charm.getOrCreateTag().putInt("WaterCurseMode", WaterCurseItem.Mode.PURPLE.ordinal());
+        player.setItemInHand(InteractionHand.MAIN_HAND, charm);
+        Vec3 position = Vec3.atCenterOf(helper.absolutePos(BlockPos.ZERO).atY(200));
+        player.setPos(position.x, position.y, position.z); player.setXRot(-90F); player.setYRot(0F);
+        Vec3 expected = WaterPurpleRules.chargeOrigin(player.getEyePosition(), player.getLookAngle().normalize(), 24D);
+        double originalDistance = WaterCurseConfig.CHARGE_DISTANCE.get();
+        try {
+            WaterCurseConfig.CHARGE_DISTANCE.set(24D);
+            WaterCurseService.input(player, WaterCurseNetwork.Action.START, 60);
+        } finally {
+            WaterCurseConfig.CHARGE_DISTANCE.set(originalDistance);
+        }
+        // Read the actual captured cast and released beam rather than reconstructing their coordinates in the test.
+        var castsField = WaterCurseService.class.getDeclaredField("CASTS");
+        castsField.setAccessible(true);
+        var cast = ((java.util.Map<?, ?>) castsField.get(null)).get(player.getUUID());
+        helper.assertTrue(cast != null, "Origin test starts a real server cast");
+        var originField = cast.getClass().getDeclaredField("origin"); originField.setAccessible(true);
+        helper.assertTrue(expected.equals(originField.get(cast)), "Charge origin captures the configured distance at cast start");
+        var beamsField = WaterCurseService.class.getDeclaredField("BEAMS"); beamsField.setAccessible(true);
+        helper.runAfterDelay(64, () -> {
+            try {
+                var beams = (java.util.List<?>) beamsField.get(null);
+                helper.assertTrue(beams.stream().anyMatch(value -> value instanceof WaterCurseService.Beam beam
+                        && beam.player == player && beam.origin.equals(expected)),
+                        "Released attack starts at the charge core even after the configuration changes");
+            } catch (IllegalAccessException error) {
+                throw new AssertionError(error);
+            } finally {
+                WaterCurseService.logout(new net.minecraftforge.event.entity.player.PlayerEvent.PlayerLoggedOutEvent(player));
+            }
+            helper.succeed();
+        });
+    }
+
+    @GameTest(template = "empty")
     public static void purpleTravelsAtOneHundredBlocksPerSecond(GameTestHelper helper) {
         helper.assertTrue(WaterPurpleRules.travelDistance(600, 1) == 5D
                 && WaterPurpleRules.travelDistance(600, 20) == 100D

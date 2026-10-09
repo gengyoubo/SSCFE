@@ -7,6 +7,9 @@ public final class WaterPurpleRules {
     public static final int FULL_POWER_TICKS = 600;
     public static final double SPEED_BLOCKS_PER_SECOND = 100D;
     public static final double SPEED_BLOCKS_PER_TICK = SPEED_BLOCKS_PER_SECOND / 20D;
+    public static Vec3 chargeOrigin(Vec3 eyes, Vec3 direction, double distance) {
+        return eyes.add(direction.scale(distance));
+    }
     public static double power(int duration) { return Math.min(1D, Math.max(0D, duration / 600D)); }
     private static int powerTicks(int duration) { return Math.min(FULL_POWER_TICKS, Math.max(0, duration)); }
     public static int waterCost(int duration) { return (32_000 * powerTicks(duration) + 599) / 600; }

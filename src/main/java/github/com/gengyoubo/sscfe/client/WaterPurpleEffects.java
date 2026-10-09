@@ -184,7 +184,8 @@ public final class WaterPurpleEffects {
             if (!p.packet.dimension().equals(mc.level.dimension().location())) continue;
             double elapsed = p.elapsed() + event.getPartialTick();
             Vec3 core = p.core(elapsed);
-            if (core.distanceToSqr(camera) > 512D * 512D) continue;
+            double renderDistance = SscfeClientConfig.EFFECT_RENDER_DISTANCE.get();
+            if (core.distanceToSqr(camera) > renderDistance * renderDistance) continue;
             double growth = Math.min(1D, elapsed / 600D);
             double size = p.packet.stage() == WaterCurseNetwork.Stage.RELEASE
                     ? 2D + 6D * WaterPurpleRules.power(p.packet.duration()) : 0.4D + 5.6D * growth;
@@ -249,7 +250,7 @@ public final class WaterPurpleEffects {
                     ? packet.serverNow() - packet.startedAt() + clientTicks - receivedAt : clientTicks - receivedAt;
         }
         Vec3 core(double elapsed) {
-            if (packet.stage() == WaterCurseNetwork.Stage.CHARGE) return packet.origin().add(packet.direction().scale(3D));
+            if (packet.stage() == WaterCurseNetwork.Stage.CHARGE) return packet.origin();
             return packet.origin().add(packet.direction().scale(WaterPurpleRules.travelDistance(packet.duration(), elapsed)));
         }
         void music() {
@@ -284,7 +285,8 @@ public final class WaterPurpleEffects {
             double elapsed = elapsed();
             Vec3 core = core(elapsed);
             Vec3 camera = mc.gameRenderer.getMainCamera().getPosition();
-            if (core.distanceToSqr(camera) > 256D * 256D) return;
+            double particleDistance = SscfeClientConfig.PARTICLE_RENDER_DISTANCE.get();
+            if (core.distanceToSqr(camera) > particleDistance * particleDistance) return;
             double growth = Math.min(1D, elapsed / 600D);
             double radius = packet.stage() == WaterCurseNetwork.Stage.RELEASE
                     ? 2D + 6D * WaterPurpleRules.power(packet.duration()) : 1D + 10D * growth;

@@ -4,6 +4,10 @@ import net.minecraftforge.common.ForgeConfigSpec;
 
 public final class WaterCurseConfig {
     private static final ForgeConfigSpec.Builder BUILDER = new ForgeConfigSpec.Builder();
+    public static final ForgeConfigSpec.DoubleValue CHARGE_DISTANCE = BUILDER
+            .comment("Distance from the caster's eyes to the charge core and projectile origin, in blocks.",
+                    "Captured when casting starts and sent to every client. Small values can overlap the caster.")
+            .defineInRange("water_purple.charge_distance", 12D, 1D, 64D);
     public static final ForgeConfigSpec.IntValue MIN_CAST_TICKS = BUILDER
             .comment("Minimum player-selected casting duration. 20 ticks = 1 second.")
             .defineInRange("water_purple.min_cast_ticks", 60, 20, 12000);

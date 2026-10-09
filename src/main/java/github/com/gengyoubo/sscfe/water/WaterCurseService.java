@@ -92,7 +92,9 @@ public final class WaterCurseService {
             if (player.isSleeping()) player.stopSleepInBed(false, true);
             player.stopFallFlying();
         }
-        Cast cast = new Cast(player, stack, player.serverLevel(), player.position(), player.getLookAngle().normalize(),
+        Vec3 direction = player.getLookAngle().normalize();
+        Vec3 origin = WaterPurpleRules.chargeOrigin(player.getEyePosition(), direction, WaterCurseConfig.CHARGE_DISTANCE.get());
+        Cast cast = new Cast(player, stack, player.serverLevel(), player.position(), origin, direction,
                 player.getYRot(), player.getXRot(), player.level().getGameTime(), ticks, WaterCurseItem.special(stack));
         CASTS.put(player.getUUID(), cast);
         lock(cast);
@@ -126,7 +128,7 @@ public final class WaterCurseService {
 
     private static void broadcast(Cast cast, WaterCurseNetwork.Stage stage) {
         WaterCurseNetwork.broadcast(cast.player, WaterCurseNetwork.effect(cast.player, stage, cast.special,
-                cast.startedAt, cast.duration, cast.position.add(0, cast.player.getEyeHeight(), 0), cast.direction));
+                cast.startedAt, cast.duration, cast.origin, cast.direction));
     }
 
     public static void cancel(Player player) {
@@ -160,8 +162,7 @@ public final class WaterCurseService {
                 }
                 if (!pay(player, cast.duration)) { insufficient(player); cancel(player); continue; }
                 CASTS.remove(player.getUUID());
-                Vec3 origin = cast.position.add(0, player.getEyeHeight(), 0);
-                BEAMS.add(new Beam(player, cast.level, origin, cast.direction, cast.duration));
+                BEAMS.add(new Beam(player, cast.level, cast.origin, cast.direction, cast.duration));
                 broadcast(cast, WaterCurseNetwork.Stage.RELEASE);
                 cast.level.playSound(null, player.blockPosition(), ModWaterSounds.RELEASE.get(), SoundSource.PLAYERS, 3F, 0.65F);
                 if (!player.isCreative()) player.getCooldowns().addCooldown(ModWaterContent.WATER_CURSE.get(), 200);
@@ -218,7 +219,7 @@ public final class WaterCurseService {
     @SubscribeEvent public static void login(PlayerEvent.PlayerLoggedInEvent event) {
         if (event.getEntity() instanceof ServerPlayer receiver) for (Cast cast : CASTS.values())
             WaterCurseNetwork.send(receiver, WaterCurseNetwork.effect(cast.player, WaterCurseNetwork.Stage.CHARGE,
-                    cast.special, cast.startedAt, cast.duration, cast.position.add(0, cast.player.getEyeHeight(), 0), cast.direction));
+                    cast.special, cast.startedAt, cast.duration, cast.origin, cast.direction));
     }
 
     public static boolean breakable(BlockState state, ServerLevel level, BlockPos pos) {
@@ -234,7 +235,7 @@ public final class WaterCurseService {
                 net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("forge", "ores"));
     }
 
-    private record Cast(ServerPlayer player, ItemStack stack, ServerLevel level, Vec3 position, Vec3 direction,
+    private record Cast(ServerPlayer player, ItemStack stack, ServerLevel level, Vec3 position, Vec3 origin, Vec3 direction,
                         float yaw, float pitch, long startedAt, int duration, boolean special) {}
 
     /** Sweep the moving core each tick; budgeted terrain work cannot run ahead of it. */

@@ -20,7 +20,7 @@ import java.util.function.Supplier;
 
 public final class WaterCurseNetwork {
     private static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
-            ResourceLocation.fromNamespaceAndPath(Sscfe.MOD_ID, "water_curse"), () -> "1", "1"::equals, "1"::equals);
+            ResourceLocation.fromNamespaceAndPath(Sscfe.MOD_ID, "water_curse"), () -> "2", "2"::equals, "2"::equals);
     public enum Action { START, RELEASE, CANCEL, CONFIGURE }
     public enum Stage { CHARGE, RELEASE, CANCEL }
 
@@ -59,6 +59,7 @@ public final class WaterCurseNetwork {
         }
     }
 
+    /** Origin is the authoritative charge core, also used as the projectile's starting point. */
     public record Effect(UUID caster, ResourceLocation dimension, Stage stage, boolean special,
                          long startedAt, long serverNow, int duration, Vec3 origin, Vec3 direction) {
         static void encode(Effect value, FriendlyByteBuf buf) {

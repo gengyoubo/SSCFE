@@ -40,6 +40,13 @@ public final class SscfeClientConfig {
     public static final ForgeConfigSpec.IntValue EFFECT_PARTICLES = BUILDER
             .comment("Particle budget per visible cast per tick. Blue cores and water vortices use built-in particles.")
             .defineInRange("water_purple.particles_per_tick", 64, 8, 192);
+    public static final ForgeConfigSpec.IntValue EFFECT_RENDER_DISTANCE = BUILDER
+            .comment("Maximum core geometry distance in blocks. The game's view distance and projection still apply.",
+                    "Distance culling only skips drawing; the projectile keeps its flight state.")
+            .defineInRange("water_purple.effect_render_distance", 1024, 64, 4096);
+    public static final ForgeConfigSpec.IntValue PARTICLE_RENDER_DISTANCE = BUILDER
+            .comment("Maximum particle spawn distance in blocks. Geometry has a separate distance limit.")
+            .defineInRange("water_purple.particle_render_distance", 512, 32, 1024);
 
     public static final ForgeConfigSpec SPEC = BUILDER.build();
 
