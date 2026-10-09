@@ -1,0 +1,277 @@
+package github.com.gengyoubo.sscfe.water;
+
+import github.com.gengyoubo.sscfe.Sscfe;
+import github.com.gengyoubo.sscfe.init.ModWaterContent;
+import github.com.gengyoubo.sscfe.init.ModWaterSounds;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.tags.BlockTags;
+import net.minecraft.world.damagesource.DamageTypes;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.monster.Blaze;
+import net.minecraft.world.entity.monster.MagmaCube;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.entity.living.LivingDamageEvent;
+import net.minecraftforge.event.entity.living.LivingDeathEvent;
+import net.minecraftforge.event.entity.living.LivingHurtEvent;
+import net.minecraftforge.event.entity.player.PlayerEvent;
+import net.minecraftforge.event.level.BlockEvent;
+import net.minecraftforge.event.server.ServerStoppedEvent;
+import net.minecraftforge.eventbus.api.EventPriority;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.ModList;
+import net.minecraftforge.fml.common.Mod;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+@Mod.EventBusSubscriber(modid = Sscfe.MOD_ID)
+public final class WaterCurseService {
+    private static final Map<UUID, Cast> CASTS = new HashMap<>();
+    private static final List<Beam> BEAMS = new ArrayList<>();
+    private static final Map<UUID, Long> LAST_CONFIGURE = new HashMap<>();
+    private static final int MAX_BEAMS = 8;
+
+    public static ItemStack accessory(Player player) {
+        if (!AxolotlWaterService.isAxolotl(player) || !ModList.get().isLoaded("curios")) return ItemStack.EMPTY;
+        return CuriosWaterCompat.equipped(player).stream().filter(stack -> stack.is(ModWaterContent.WATER_CURSE.get()))
+                .findFirst().orElse(ItemStack.EMPTY);
+    }
+
+    public static boolean casting(Player player) { return CASTS.containsKey(player.getUUID()); }
+
+    public static void input(ServerPlayer player, WaterCurseNetwork.Action action, int requestedTicks) {
+        if (action == WaterCurseNetwork.Action.CANCEL) { cancel(player); return; }
+        // RELEASE from older clients does not determine server casting time.
+        if (action == WaterCurseNetwork.Action.RELEASE) return;
+        ItemStack stack = accessory(player);
+        if (stack.isEmpty() || player.isSpectator() || !player.isAlive()) return;
+        if (action == WaterCurseNetwork.Action.CONFIGURE) {
+            if (!player.getMainHandItem().isEmpty() || !player.getOffhandItem().isEmpty()) return;
+            long now = player.level().getGameTime();
+            if (now - LAST_CONFIGURE.getOrDefault(player.getUUID(), -100L) < 4) return;
+            LAST_CONFIGURE.put(player.getUUID(), now);
+            WaterCurseItem.configure(player, stack);
+        } else if (action == WaterCurseNetwork.Action.START && WaterCurseItem.mode(stack) == WaterCurseItem.Mode.PURPLE) {
+            if (casting(player)) { cancel(player); return; }
+            start(player, stack, requestedTicks);
+        }
+    }
+
+    private static void start(ServerPlayer player, ItemStack stack, int requestedTicks) {
+        if (player.isPassenger() || player.isSleeping() || player.isFallFlying()
+                || player.getCooldowns().isOnCooldown(ModWaterContent.WATER_CURSE.get())) return;
+        int min = WaterCurseConfig.MIN_CAST_TICKS.get();
+        int max = Math.max(min, WaterCurseConfig.MAX_CAST_TICKS.get());
+        int ticks = Math.max(min, Math.min(max, requestedTicks));
+        if (!canPay(player, ticks)) { insufficient(player); return; }
+        Cast cast = new Cast(player, stack, player.serverLevel(), player.position(), player.getLookAngle().normalize(),
+                player.getYRot(), player.getXRot(), player.level().getGameTime(), ticks, WaterCurseItem.special(stack));
+        CASTS.put(player.getUUID(), cast);
+        lock(cast);
+        player.connection.teleport(cast.position.x, cast.position.y, cast.position.z, cast.yaw, cast.pitch);
+        broadcast(cast, WaterCurseNetwork.Stage.CHARGE);
+        cast.level.playSound(null, player.blockPosition(), ModWaterSounds.CHARGE.get(), SoundSource.PLAYERS, 1F, 0.8F);
+    }
+
+    public static boolean canPay(Player player, int ticks) {
+        return player.getAirSupply() >= WaterPurpleRules.moistureCost(ticks, player.getMaxAirSupply())
+                && AxolotlWaterService.availableWater(player) >= WaterPurpleRules.waterCost(ticks);
+    }
+
+    public static boolean pay(Player player, int ticks) {
+        if (!canPay(player, ticks) || !AxolotlWaterService.consumeWater(player, WaterPurpleRules.waterCost(ticks))) return false;
+        player.setAirSupply(player.getAirSupply() - WaterPurpleRules.moistureCost(ticks, player.getMaxAirSupply()));
+        return true;
+    }
+
+    private static void insufficient(Player player) { player.displayClientMessage(Component.translatable("message.sscfe.water_curse.resources"), true); }
+
+    private static void lock(Cast cast) {
+        cast.player.setDeltaMovement(Vec3.ZERO);
+        cast.player.setPos(cast.position.x, cast.position.y, cast.position.z);
+        cast.player.setYRot(cast.yaw); cast.player.setXRot(cast.pitch);
+        cast.player.setYHeadRot(cast.yaw); cast.player.setYBodyRot(cast.yaw);
+        cast.player.fallDistance = 0F;
+    }
+
+    private static void broadcast(Cast cast, WaterCurseNetwork.Stage stage) {
+        WaterCurseNetwork.broadcast(cast.player, WaterCurseNetwork.effect(cast.player, stage, cast.special,
+                cast.startedAt, cast.duration, cast.position.add(0, cast.player.getEyeHeight(), 0), cast.direction));
+    }
+
+    public static void cancel(Player player) {
+        Cast cast = CASTS.remove(player.getUUID());
+        if (cast != null) {
+            broadcast(cast, WaterCurseNetwork.Stage.CANCEL);
+            // A server teleport also restores clients which missed the first lock packet.
+            if (player instanceof ServerPlayer serverPlayer && serverPlayer.level() == cast.level && player.isAlive())
+                serverPlayer.connection.teleport(player.getX(), player.getY(), player.getZ(), player.getYRot(), player.getXRot());
+        }
+    }
+
+    @SubscribeEvent
+    public static void tick(TickEvent.ServerTickEvent event) {
+        if (event.phase != TickEvent.Phase.END) return;
+        for (Cast cast : List.copyOf(CASTS.values())) {
+            ServerPlayer player = cast.player;
+            ItemStack equipped = accessory(player);
+            if (!player.isAlive() || player.isRemoved() || player.level() != cast.level || player.isSpectator()
+                    || equipped != cast.stack || WaterCurseItem.mode(equipped) != WaterCurseItem.Mode.PURPLE
+                    || WaterCurseItem.special(equipped) != cast.special || player.isPassenger()
+                    || player.position().distanceToSqr(cast.position) > 64) {
+                cancel(player); continue;
+            }
+            lock(cast);
+            long elapsed = cast.level.getGameTime() - cast.startedAt;
+            if (elapsed >= cast.duration) {
+                if (BEAMS.size() >= MAX_BEAMS) {
+                    player.displayClientMessage(Component.translatable("message.sscfe.water_curse.busy"), true);
+                    cancel(player); continue;
+                }
+                if (!pay(player, cast.duration)) { insufficient(player); cancel(player); continue; }
+                CASTS.remove(player.getUUID());
+                Vec3 origin = cast.position.add(0, player.getEyeHeight(), 0);
+                BEAMS.add(new Beam(player, cast.level, origin, cast.direction, cast.duration));
+                broadcast(cast, WaterCurseNetwork.Stage.RELEASE);
+                cast.level.playSound(null, player.blockPosition(), ModWaterSounds.RELEASE.get(), SoundSource.PLAYERS, 3F, 0.65F);
+                player.getCooldowns().addCooldown(ModWaterContent.WATER_CURSE.get(), 200);
+                player.connection.teleport(cast.position.x, cast.position.y, cast.position.z, cast.yaw, cast.pitch);
+            } else if (elapsed % 20 == 0) broadcast(cast, WaterCurseNetwork.Stage.CHARGE);
+        }
+        int budget = Math.max(1, WaterCurseConfig.BLOCK_BUDGET.get() / Math.max(1, BEAMS.size()));
+        BEAMS.removeIf(beam -> beam.tick(budget));
+    }
+
+    @SubscribeEvent(priority = EventPriority.LOWEST)
+    public static void damaged(LivingDamageEvent event) {
+        if (event.getAmount() > 0F && event.getEntity() instanceof Player player && !player.level().isClientSide) cancel(player);
+    }
+
+    @SubscribeEvent(priority = EventPriority.HIGH)
+    public static void waterCombat(LivingHurtEvent event) {
+        if (event.getEntity().level().isClientSide || event.getAmount() <= 0F) return;
+        if (event.getEntity() instanceof Player victim) {
+            ItemStack charm = accessory(victim);
+            if (!charm.isEmpty() && WaterCurseItem.enabled(charm, WaterCurseItem.Mode.SHIELD) && victim.getAirSupply() >= 1) {
+                float reduced = WaterPurpleRules.shieldDamage(event.getAmount());
+                victim.setAirSupply(victim.getAirSupply() - 1);
+                event.setAmount(reduced);
+                splash(victim);
+            }
+        }
+        if (event.getSource().getEntity() instanceof Player attacker && event.getSource().is(DamageTypes.PLAYER_ATTACK)) {
+            ItemStack charm = accessory(attacker);
+            WaterCurseItem.Mode mode = attacker.getMainHandItem().isEmpty() ? WaterCurseItem.Mode.FIST : WaterCurseItem.Mode.WEAPON;
+            if (!charm.isEmpty() && WaterCurseItem.enabled(charm, mode) && attacker.getAirSupply() >= 1) {
+                attacker.setAirSupply(attacker.getAirSupply() - 1);
+                float multiplier = event.getEntity() instanceof Blaze || event.getEntity() instanceof MagmaCube ? 2.5F : 1.5F;
+                event.setAmount(event.getAmount() * multiplier);
+                splash(event.getEntity());
+            }
+        }
+    }
+
+    private static void splash(LivingEntity entity) {
+        ((ServerLevel) entity.level()).sendParticles(ParticleTypes.SPLASH, entity.getX(), entity.getY() + 0.8D,
+                entity.getZ(), 12, 0.4D, 0.4D, 0.4D, 0.05D);
+    }
+
+    @SubscribeEvent public static void death(LivingDeathEvent event) {
+        if (event.getEntity() instanceof Player player) cancel(player);
+    }
+    @SubscribeEvent public static void logout(PlayerEvent.PlayerLoggedOutEvent event) {
+        cancel(event.getEntity()); LAST_CONFIGURE.remove(event.getEntity().getUUID());
+        BEAMS.removeIf(beam -> beam.player == event.getEntity());
+    }
+    @SubscribeEvent public static void dimension(PlayerEvent.PlayerChangedDimensionEvent event) { cancel(event.getEntity()); }
+    @SubscribeEvent public static void stopped(ServerStoppedEvent event) { CASTS.clear(); BEAMS.clear(); LAST_CONFIGURE.clear(); }
+    @SubscribeEvent public static void login(PlayerEvent.PlayerLoggedInEvent event) {
+        if (event.getEntity() instanceof ServerPlayer receiver) for (Cast cast : CASTS.values())
+            WaterCurseNetwork.send(receiver, WaterCurseNetwork.effect(cast.player, WaterCurseNetwork.Stage.CHARGE,
+                    cast.special, cast.startedAt, cast.duration, cast.position.add(0, cast.player.getEyeHeight(), 0), cast.direction));
+    }
+
+    public static boolean breakable(BlockState state, ServerLevel level, BlockPos pos) {
+        float hardness = state.getDestroySpeed(level, pos);
+        return !state.isAir() && !state.hasBlockEntity() && state.getFluidState().isEmpty()
+                && hardness >= 0F && hardness < 50F && !state.is(BlockTags.DRAGON_IMMUNE)
+                && !state.is(BlockTags.WITHER_IMMUNE);
+    }
+
+    public static boolean ore(BlockState state) { return state.is(ResourceLocationTags.ORES); }
+    private static final class ResourceLocationTags {
+        static final net.minecraft.tags.TagKey<Block> ORES = net.minecraft.tags.TagKey.create(net.minecraft.core.registries.Registries.BLOCK,
+                net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("forge", "ores"));
+    }
+
+    private record Cast(ServerPlayer player, ItemStack stack, ServerLevel level, Vec3 position, Vec3 direction,
+                        float yaw, float pitch, long startedAt, int duration, boolean special) {}
+
+    /** Damage lasts one second; terrain work is amortized separately over a finite loaded ray. */
+    private static final class Beam {
+        final ServerPlayer player;
+        final ServerLevel level;
+        final Vec3 origin, direction, side, up;
+        final int duration, radius, width;
+        final double range;
+        final AABB bounds;
+        int age, cursor;
+        Beam(ServerPlayer player, ServerLevel level, Vec3 origin, Vec3 direction, int duration) {
+            this.player = player; this.level = level; this.origin = origin; this.direction = direction; this.duration = duration;
+            range = WaterPurpleRules.range(duration); radius = WaterPurpleRules.breakRadius(duration); width = radius * 2 + 1;
+            side = direction.cross(Math.abs(direction.y) > 0.95D ? new Vec3(1, 0, 0) : new Vec3(0, 1, 0)).normalize();
+            up = side.cross(direction).normalize();
+            bounds = new AABB(origin, origin.add(direction.scale(range))).inflate(WaterPurpleRules.damageRadius(duration));
+        }
+        boolean tick(int budget) {
+            if (player.isRemoved() || player.level() != level) return true;
+            if (age++ < 20) {
+                double hitRadius = WaterPurpleRules.damageRadius(duration);
+                for (LivingEntity target : level.getEntitiesOfClass(LivingEntity.class, bounds,
+                        target -> target != player && target.isAlive() && !target.isSpectator())) {
+                    if (target instanceof Player other && !player.canHarmPlayer(other)) continue;
+                    if (WaterPurpleRules.distanceToRaySquared(target.getBoundingBox().getCenter(), origin, direction, range) > hitRadius * hitRadius) continue;
+                    int invulnerable = target.invulnerableTime;
+                    target.invulnerableTime = 0;
+                    target.hurt(level.damageSources().indirectMagic(player, player), WaterPurpleRules.damagePerTick(duration));
+                    target.invulnerableTime = invulnerable;
+                }
+            }
+            if (!WaterCurseConfig.BREAK_BLOCKS.get() || !player.mayBuild()) return age >= 20;
+            int total = ((int) Math.ceil(range) + 1) * width * width;
+            for (int i = 0; i < budget && cursor < total; i++, cursor++) {
+                int along = cursor / (width * width);
+                int x = (cursor / width) % width - radius;
+                int y = cursor % width - radius;
+                if (x * x + y * y > radius * radius) continue;
+                BlockPos pos = BlockPos.containing(origin.add(direction.scale(along)).add(side.scale(x)).add(up.scale(y)));
+                if (!level.isInWorldBounds(pos) || !level.hasChunkAt(pos)) continue;
+                BlockState state = level.getBlockState(pos);
+                if (!breakable(state, level, pos) || !level.mayInteract(player, pos)
+                        || MinecraftForge.EVENT_BUS.post(new BlockEvent.BreakEvent(level, pos, state, player))) continue;
+                if (level.getBlockState(pos) != state || level.getBlockEntity(pos) != null) continue;
+                // Use the real tool so ore drops follow enchantments; limit ore drops to ten percent.
+                if (ore(state) && level.random.nextFloat() < 0.1F)
+                    Block.dropResources(state, level, pos, null, player, player.getMainHandItem());
+                level.setBlock(pos, net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), 2);
+            }
+            return age >= 20 && cursor >= total;
+        }
+    }
+    private WaterCurseService() {}
+}

@@ -1,0 +1,13 @@
+{
+  "music.water_purple_special": {
+    "sounds": []
+  },
+  "skill.water_purple_charge": {
+    "subtitle": "subtitles.sscfe.water_purple_charge",
+    "sounds": [{ "name": "minecraft:block.beacon.activate", "type": "event" }]
+  },
+  "skill.water_purple_release": {
+    "subtitle": "subtitles.sscfe.water_purple_release",
+    "sounds": [{ "name": "minecraft:entity.generic.explode", "type": "event" }]
+  }
+}

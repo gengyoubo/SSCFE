@@ -1,0 +1,6 @@
+{
+  "music.water_purple_special": {
+    "replace": true,
+    "sounds": [{ "name": "sscfe:music/water_purple_special", "stream": true }]
+  }
+}

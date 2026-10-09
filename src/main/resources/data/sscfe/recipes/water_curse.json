@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": ["XYX", "YZY", "XYX"],
+  "key": {
+    "X": { "item": "sscfe:wet_moondust" },
+    "Y": { "item": "minecraft:iron_ingot" },
+    "Z": { "item": "minecraft:netherite_scrap" }
+  },
+  "result": { "item": "sscfe:water_curse" }
+}

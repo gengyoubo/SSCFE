@@ -18,7 +18,7 @@ public abstract class FormGeoModelMixin {
     private static final ResourceLocation SSCFE_SURFACE_SPRINT_ANIMATION =
             ResourceLocation.fromNamespaceAndPath(ShapeShifterCurseForge.RESOURCE_NAMESPACE,
                     "player_animation/new/form_axolotl_3_new.animation.json");
-    private static final String SSCFE_SURFACE_SPRINT_ID = "The Surface Sprint Begins";
+    private static final String SSCFE_SURFACE_SPRINT_ID = "the_surface_sprint_begins";
 
     @Inject(method = "setCustomAnimations", at = @At("TAIL"), remap = false)
     private void sscfe$applySurfaceSprint(FormGeoAnimatable animatable, long instanceId,

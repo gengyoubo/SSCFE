@@ -12,12 +12,15 @@
     "MobGoalSelectorAccessor",
     "FormPowerRuntimeSoundMixin",
     "FormPowerRuntimeAccessoryGuardMixin",
-    "FormActivePowerSoundResponseMixin"
+    "FormActivePowerSoundResponseMixin",
+    "WaterPurpleMovementMixin"
   ],
   "client": [
     "client.FormAnimationSystemMixin",
     "client.FormGeoAnimatableMixin",
-    "client.FormGeoModelMixin"
+    "client.FormGeoModelMixin",
+    "client.WaterPurpleMouseMixin",
+    "client.WaterPurplePoseMixin"
   ],
   "injectors": {
     "defaultRequire": 1

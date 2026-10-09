@@ -10,6 +10,28 @@ public final class SscfeClientConfig {
                     "When disabled, Shape Shifter Curse uses its bundled legacy animations.")
             .define("animations.prefer_new_animations", true);
 
+    public static final ForgeConfigSpec.IntValue WATER_PURPLE_CAST_TICKS = BUILDER
+            .comment("Click the water skill key once to cast. Server limits apply. Full power at 600 ticks.")
+            .defineInRange("water_purple.cast_ticks", 600, 20, 12000);
+    public static final ForgeConfigSpec.IntValue SPECIAL_CHARGE_TICKS = BUILDER
+            .comment("Player-selected special presentation duration. 1140 ticks = 57 seconds is only an example; server limits apply.")
+            .defineInRange("water_purple_special.special_charge_ticks", 600, 20, 12000);
+    public static final ForgeConfigSpec.BooleanValue SPECIAL_MUSIC_ENABLED = BUILDER
+            .define("water_purple_special.enabled", true);
+    public static final ForgeConfigSpec.ConfigValue<String> SPECIAL_SOUND_ID = BUILDER
+            .comment("Sound event from an installed resource pack; audio is never downloaded or sent by the server.")
+            .define("water_purple_special.sound_id", "sscfe:music.water_purple_special",
+                    value -> value instanceof String id && net.minecraft.resources.ResourceLocation.tryParse(id) != null);
+    public static final ForgeConfigSpec.DoubleValue SPECIAL_MUSIC_VOLUME = BUILDER
+            .defineInRange("water_purple_special.volume", 1.0D, 0.0D, 1.0D);
+    public static final ForgeConfigSpec.IntValue MUSIC_START_DELAY_TICKS = BUILDER
+            .comment("Delay music after cast begins. This delays playback; it does not seek inside an OGG stream.",
+                    "Trim the OGG externally to start at a particular part of the song.")
+            .defineInRange("water_purple_special.music_start_delay_ticks", 0, 0, 12000);
+    public static final ForgeConfigSpec.IntValue EFFECT_PARTICLES = BUILDER
+            .comment("Particle budget per visible cast per tick. Blue cores and water vortices use built-in particles.")
+            .defineInRange("water_purple.particles_per_tick", 64, 8, 192);
+
     public static final ForgeConfigSpec SPEC = BUILDER.build();
 
     private SscfeClientConfig() {

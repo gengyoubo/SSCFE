@@ -1,6 +1,7 @@
 {
   "replace": false,
   "values": [
-    "sscfe:water_as_food"
+    "sscfe:water_as_food",
+    "sscfe:water_curse"
   ]
 }

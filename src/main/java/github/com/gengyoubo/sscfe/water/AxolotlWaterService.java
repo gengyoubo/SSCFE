@@ -75,6 +75,12 @@ public final class AxolotlWaterService {
     }
 
     /** Shared, atomic water consumption for future water-powered accessories and moves (mB). */
+    public static int availableWater(Player player) {
+        if (!isAxolotl(player)) return 0;
+        return equipped(player).stream().filter(stack -> stack.is(ModWaterContent.LARGE_WATER_TANK.get()))
+                .mapToInt(WaterItemStorage::amount).sum();
+    }
+
     public static boolean consumeWater(Player player, int amount) {
         if (amount < 0 || player.level().isClientSide || !isAxolotl(player)) return false;
         List<ItemStack> tanks = equipped(player).stream()

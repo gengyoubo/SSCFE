@@ -7,6 +7,7 @@ import github.com.gengyoubo.sscfe.water.MoisturizerItem;
 import github.com.gengyoubo.sscfe.water.WaterFoodItem;
 import github.com.gengyoubo.sscfe.water.WaterTankBlock;
 import github.com.gengyoubo.sscfe.water.WaterTankBlockEntity;
+import github.com.gengyoubo.sscfe.water.WaterCurseItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -31,6 +32,7 @@ public final class ModWaterContent {
     public static final RegistryObject<Item> TANK_CORE = ITEMS.register("tank_core", () -> new Item(new Item.Properties()));
     public static final RegistryObject<MoisturizerItem> MOISTURIZER = ITEMS.register("moisturizer", MoisturizerItem::new);
     public static final RegistryObject<WaterFoodItem> WATER_AS_FOOD = ITEMS.register("water_as_food", WaterFoodItem::new);
+    public static final RegistryObject<WaterCurseItem> WATER_CURSE = ITEMS.register("water_curse", WaterCurseItem::new);
     public static final RegistryObject<WaterTankBlock> LARGE_WATER_TANK_BLOCK = BLOCKS.register("large_water_tank",
             () -> new WaterTankBlock(BlockBehaviour.Properties.of().mapColor(MapColor.METAL)
                     .strength(3.5F).requiresCorrectToolForDrops().noOcclusion()));
@@ -63,6 +65,7 @@ public final class ModWaterContent {
             event.accept(MOISTURIZER);
             event.accept(LARGE_WATER_TANK);
             event.accept(WATER_AS_FOOD);
+            event.accept(WATER_CURSE);
         }
     }
 }

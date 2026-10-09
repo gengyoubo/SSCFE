@@ -1,0 +1,15 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_moondust": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": { "items": [{ "items": ["sscfe:wet_moondust"] }] }
+    },
+    "has_the_recipe": {
+      "trigger": "minecraft:recipe_unlocked",
+      "conditions": { "recipe": "sscfe:water_curse" }
+    }
+  },
+  "requirements": [["has_moondust", "has_the_recipe"]],
+  "rewards": { "recipes": ["sscfe:water_curse"] }
+}

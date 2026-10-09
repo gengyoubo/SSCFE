@@ -17,6 +17,11 @@ import net.minecraft.world.inventory.TransientCraftingContainer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraftforge.event.entity.living.LivingDamageEvent;
+import net.minecraftforge.event.entity.living.LivingHurtEvent;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraftforge.common.capabilities.ForgeCapabilities;
@@ -35,6 +40,143 @@ import java.util.UUID;
 @GameTestHolder(Sscfe.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class WaterFeatureGameTests {
+    @GameTest(template = "empty")
+    public static void purpleAnimationEndsAtFiring(GameTestHelper helper) {
+        var early = WaterPurpleAnimationTimeline.sample(559, 600, false);
+        var finalStart = WaterPurpleAnimationTimeline.sample(560, 600, false);
+        var finalMiddle = WaterPurpleAnimationTimeline.sample(580, 600, false);
+        helper.assertTrue(early.clip().equals("mizu_mulasaki1") && early.seconds() == 2F,
+                "Clip one holds its final pose until second 28");
+        helper.assertTrue(finalStart.clip().equals("mizu_mulasaki2") && finalStart.seconds() == 0F
+                && finalMiddle.seconds() == 1F && WaterPurpleAnimationTimeline.sample(600, 600, false).seconds() == 2F,
+                "Clip two plays forwards from seconds 28 to 30");
+        helper.assertTrue(WaterPurpleAnimationTimeline.sample(1100, 1140, false).clip().equals("mizu_mulasaki2")
+                && WaterPurpleAnimationTimeline.sample(1100, 1140, false).seconds() == 0F,
+                "Custom timing starts clip two exactly two seconds before firing");
+        helper.assertTrue(WaterPurpleAnimationTimeline.sample(20, 60, false).seconds() == 0F
+                && WaterPurpleAnimationTimeline.sample(0, 600, true).seconds() == 2F
+                && WaterPurpleAnimationTimeline.sample(5, 600, true) == null,
+                "Short casts and the firing pose finish correctly without replaying clip two");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void purplePowerPaymentAndSafety(GameTestHelper helper) {
+        TestPlayer player = axolotl(helper);
+        ItemStack tank = new ItemStack(ModWaterContent.LARGE_WATER_TANK.get());
+        equip(player, "back", tank);
+        WaterItemStorage.fill(tank, 32000, FluidAction.EXECUTE);
+        player.setAirSupply(149);
+        helper.assertTrue(!WaterCurseService.pay(player, 600) && WaterItemStorage.amount(tank) == 32000,
+                "Insufficient moisture never drains water");
+        player.setAirSupply(300);
+        WaterItemStorage.drain(tank, 1, FluidAction.EXECUTE);
+        helper.assertTrue(!WaterCurseService.pay(player, 600) && player.getAirSupply() == 300,
+                "Insufficient water never drains moisture");
+        WaterItemStorage.fill(tank, 1, FluidAction.EXECUTE);
+        helper.assertTrue(WaterCurseService.pay(player, 600) && WaterItemStorage.amount(tank) == 0 && player.getAirSupply() == 150,
+                "Full power spends exactly 32 B and fifty percent maximum moisture");
+        helper.assertTrue(WaterPurpleRules.waterCost(60) == 3200 && WaterPurpleRules.moistureCost(60, 300) == 15
+                        && WaterPurpleRules.range(60) == 300 && WaterPurpleRules.damagePerTick(60) == 2.5F,
+                "Three-second cast has ten percent power and cost");
+        helper.assertTrue(WaterPurpleRules.waterCost(1140) == 32000 && WaterPurpleRules.range(2400) == 3000
+                        && WaterPurpleRules.damagePerTick(2400) == 25F,
+                "Presentation beyond thirty seconds cannot increase power");
+        BlockPos pos = helper.absolutePos(BlockPos.ZERO);
+        helper.assertTrue(WaterCurseService.breakable(Blocks.STONE.defaultBlockState(), helper.getLevel(), pos), "Ordinary terrain can break");
+        helper.assertTrue(!WaterCurseService.breakable(Blocks.OBSIDIAN.defaultBlockState(), helper.getLevel(), pos)
+                && !WaterCurseService.breakable(Blocks.BEDROCK.defaultBlockState(), helper.getLevel(), pos)
+                && !WaterCurseService.breakable(Blocks.CHEST.defaultBlockState(), helper.getLevel(), pos)
+                && !WaterCurseService.breakable(ModWaterContent.LARGE_WATER_TANK_BLOCK.get().defaultBlockState(), helper.getLevel(), pos),
+                "Obsidian, bedrock, containers and machines are protected");
+        helper.assertTrue(WaterCurseService.ore(Blocks.DIAMOND_ORE.defaultBlockState())
+                && !WaterCurseService.ore(Blocks.STONE.defaultBlockState()), "Only ores are eligible for limited drops");
+        helper.assertTrue(WaterPurpleRules.distanceToRaySquared(new Vec3(10, 2, 0), Vec3.ZERO, new Vec3(1, 0, 0), 30) == 4,
+                "Ray damage uses distance to the locked direction");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void curseSettingsAndShield(GameTestHelper helper) {
+        TestPlayer player = axolotl(helper);
+        ItemStack charm = new ItemStack(ModWaterContent.WATER_CURSE.get());
+        equip(player, "charm", charm);
+        charm.getOrCreateTag().putInt("WaterCurseMode", WaterCurseItem.Mode.SHIELD.ordinal());
+        WaterCurseItem.configure(player, charm);
+        helper.assertTrue(WaterCurseItem.enabled(charm, WaterCurseItem.Mode.SHIELD), "Right-click enables selected shield");
+        player.setShiftKeyDown(true);
+        WaterCurseItem.configure(player, charm);
+        helper.assertTrue(WaterCurseItem.mode(charm) == WaterCurseItem.Mode.PURPLE
+                && WaterCurseItem.enabled(charm, WaterCurseItem.Mode.SHIELD), "Changing mode preserves shield protection");
+        player.setShiftKeyDown(false);
+        WaterCurseItem.configure(player, charm);
+        ItemStack reloaded = ItemStack.of(charm.save(new CompoundTag()));
+        helper.assertTrue(WaterCurseItem.special(reloaded) && WaterCurseItem.enabled(reloaded, WaterCurseItem.Mode.SHIELD),
+                "Variant and individual toggles persist through save/load");
+        player.setAirSupply(100);
+        var small = new LivingHurtEvent(player, player.damageSources().generic(), 5F);
+        WaterCurseService.waterCombat(small);
+        helper.assertTrue(small.getAmount() == 0F && player.getAirSupply() == 99, "Shield fully blocks five damage for one moisture");
+        var large = new LivingHurtEvent(player, player.damageSources().generic(), 15F);
+        WaterCurseService.waterCombat(large);
+        helper.assertTrue(large.getAmount() == 9F && player.getAirSupply() == 98, "Shield subtracts five then reduces the remainder ten percent");
+        player.setAirSupply(0);
+        var dry = new LivingHurtEvent(player, player.damageSources().generic(), 5F);
+        WaterCurseService.waterCombat(dry);
+        helper.assertTrue(dry.getAmount() == 5F, "Dry shield cannot provide free protection");
+        helper.assertTrue(helper.getLevel().getRecipeManager().byKey(ResourceLocation.fromNamespaceAndPath("sscfe", "water_curse")).isPresent(),
+                "Water curse crafting recipe loads");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 100)
+    public static void lockedCastDamageAndAutomaticRelease(GameTestHelper helper) {
+        ServerPlayer player = new net.minecraftforge.common.util.FakePlayer(helper.getLevel(), new GameProfile(UUID.randomUUID(), "purple-test"));
+        var data = SscApi.currentForm(player).orElseThrow();
+        data.setFormId("shape-shifter-curse:axolotl_2"); data.setFormGroupId("shape-shifter-curse:axolotl_form");
+        data.setFormTier(2); data.setContentEnabled(true);
+        CuriosApi.getCuriosInventory(player).orElseThrow(AssertionError::new).reset();
+        ItemStack charm = new ItemStack(ModWaterContent.WATER_CURSE.get());
+        ItemStack tank = new ItemStack(ModWaterContent.LARGE_WATER_TANK.get());
+        charm.getOrCreateTag().putInt("WaterCurseMode", WaterCurseItem.Mode.PURPLE.ordinal());
+        equip(player, "charm", charm); equip(player, "back", tank);
+        WaterItemStorage.fill(tank, 32000, FluidAction.EXECUTE);
+        player.setAirSupply(300);
+        // Fire upwards, well above the parallel test structures.
+        player.setPos(player.getX(), 240, player.getZ()); player.setYRot(0F); player.setXRot(-90F);
+        WaterCurseService.input(player, WaterCurseNetwork.Action.START, 60);
+        helper.assertTrue(WaterCurseService.casting(player), "One click begins a cast");
+        var listener = new net.minecraft.server.network.ServerGamePacketListenerImpl(helper.getLevel().getServer(),
+                new net.minecraft.network.Connection(net.minecraft.network.protocol.PacketFlow.SERVERBOUND), player) {
+            @Override public void send(net.minecraft.network.protocol.Packet<?> packet) { }
+        };
+        Vec3 before = player.position();
+        listener.handleMovePlayer(new net.minecraft.network.protocol.game.ServerboundMovePlayerPacket.PosRot(
+                player.getX() + 1, player.getY(), player.getZ(), 90F, 0F, true));
+        helper.assertTrue(player.position().equals(before) && player.getYRot() == 0F && player.getXRot() == -90F,
+                "Movement and rotation packets are rejected on the server while casting");
+        WaterCurseService.damaged(new LivingDamageEvent(player, player.damageSources().generic(), 0F));
+        helper.assertTrue(WaterCurseService.casting(player), "Zero final damage does not interrupt");
+        WaterCurseService.damaged(new LivingDamageEvent(player, player.damageSources().generic(), 1F));
+        helper.assertTrue(!WaterCurseService.casting(player) && WaterItemStorage.amount(tank) == 32000 && player.getAirSupply() == 300,
+                "Positive final damage cancels without payment");
+        WaterCurseService.input(player, WaterCurseNetwork.Action.START, 60);
+        helper.assertTrue(WaterCurseService.casting(player), "Can retry interrupted cast");
+        helper.runAfterDelay(2, () -> {
+            player.setPos(player.getX() + 1, 240, player.getZ()); player.setYRot(90); player.setXRot(0);
+        });
+        helper.runAfterDelay(4, () -> helper.assertTrue(player.getXRot() == -90F && player.getYRot() == 0F,
+                "Server restores the initial aim during casting"));
+        helper.runAfterDelay(64, () -> {
+            helper.assertTrue(!WaterCurseService.casting(player), "Server automatically releases when configured time ends");
+            helper.assertTrue(WaterItemStorage.amount(tank) == 28800 && player.getAirSupply() == 285,
+                    "Automatic three-second release pays scaled costs exactly once");
+            helper.assertTrue(player.getCooldowns().isOnCooldown(ModWaterContent.WATER_CURSE.get()), "Successful cast has cooldown");
+            WaterCurseService.logout(new net.minecraftforge.event.entity.player.PlayerEvent.PlayerLoggedOutEvent(player));
+            helper.succeed();
+        });
+    }
+
     @GameTest(template = "empty")
     public static void waterCapabilities(GameTestHelper helper) {
         ItemStack stack = new ItemStack(ModWaterContent.LARGE_WATER_TANK.get());
