@@ -6,16 +6,12 @@ import github.com.gengyoubo.sscfe.water.WaterCurseNetwork;
 import github.com.gengyoubo.sscfe.water.WaterPurpleRules;
 import github.com.gengyoubo.sscfe.water.WaterPurpleAnimationTimeline;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.resources.sounds.SimpleSoundInstance;
-import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.core.particles.DustParticleOptions;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
-import net.minecraft.util.RandomSource;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
@@ -28,13 +24,18 @@ import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /** Bounded local geometry and particles; global packets carry timing, never audio files. */
 @Mod.EventBusSubscriber(modid = Sscfe.MOD_ID, value = Dist.CLIENT)
 public final class WaterPurpleEffects {
-    private static final Map<UUID, Presentation> ACTIVE = new HashMap<>();
+    private record CastKey(UUID caster, ResourceLocation dimension, long startedAt) {}
+    private static final Map<CastKey, Presentation> ACTIVE = new HashMap<>();
+    // Music fades independently of the projectile and can overlap a new creative cast.
+    private static final Set<WaterPurpleMusicSound> PLAYING_MUSIC = new HashSet<>();
     private static final DustParticleOptions BLUE = new DustParticleOptions(new Vector3f(0.05F, 0.45F, 1F), 2F);
     private static final DustParticleOptions CYAN = new DustParticleOptions(new Vector3f(0.1F, 0.9F, 1F), 1.5F);
     private static ResourceLocation currentDimension;
@@ -43,33 +44,54 @@ public final class WaterPurpleEffects {
     public static void accept(WaterCurseNetwork.Effect packet) {
         var mc = Minecraft.getInstance();
         if (mc.level == null || mc.player == null) return;
-        Presentation previous = ACTIVE.get(packet.caster());
+        CastKey key = new CastKey(packet.caster(), packet.dimension(), packet.startedAt());
+        Presentation previous = ACTIVE.get(key);
         if (packet.stage() == WaterCurseNetwork.Stage.CANCEL) {
-            if (previous != null && previous.packet.startedAt() == packet.startedAt()) {
-                previous.stop(); ACTIVE.remove(packet.caster());
+            if (previous != null) {
+                previous.stop(); ACTIVE.remove(key);
             }
             return;
         }
-        boolean sameCast = previous != null && previous.packet.startedAt() == packet.startedAt()
-                && previous.packet.dimension().equals(packet.dimension());
-        if (sameCast && previous.packet.stage() == WaterCurseNetwork.Stage.RELEASE
+        if (previous != null && previous.packet.stage() == WaterCurseNetwork.Stage.RELEASE
                 && packet.stage() == WaterCurseNetwork.Stage.CHARGE) return;
-        if (sameCast && previous.packet.stage() == packet.stage()) {
-            previous.packet = packet; previous.receivedAt = clientTicks; return;
+        if (previous != null) {
+            boolean justReleased = previous.packet.stage() != WaterCurseNetwork.Stage.RELEASE
+                    && packet.stage() == WaterCurseNetwork.Stage.RELEASE;
+            previous.packet = packet;
+            if (justReleased || packet.stage() == WaterCurseNetwork.Stage.CHARGE) previous.receivedAt = clientTicks;
+            if (justReleased) previous.releaseMusic();
+            return;
         }
-        if (previous != null) previous.stop();
+        // Keep already released projectiles visible when this player begins another cast.
+        ACTIVE.values().removeIf(p -> {
+            if (p.packet.caster().equals(packet.caster()) && p.packet.stage() == WaterCurseNetwork.Stage.CHARGE) {
+                p.stop(); return true;
+            }
+            return false;
+        });
         Presentation next = new Presentation(packet);
         // A late join cannot seek streaming OGG. Keep its visuals synchronized without replaying the song from zero.
         next.musicEligible = packet.special() && packet.stage() == WaterCurseNetwork.Stage.CHARGE
                 && packet.serverNow() - packet.startedAt() <= 5;
-        ACTIVE.put(packet.caster(), next);
-        if (localCasting()) lockView(next);
+        ACTIVE.put(key, next);
+        if (packet.stage() == WaterCurseNetwork.Stage.CHARGE && localCasting()) lockView(next);
+    }
+
+    private static Presentation latestPresentation(UUID caster) {
+        var mc = Minecraft.getInstance();
+        if (mc.level == null) return null;
+        Presentation latest = null;
+        for (Presentation p : ACTIVE.values()) {
+            if (p.packet.caster().equals(caster) && p.packet.dimension().equals(mc.level.dimension().location())
+                    && (latest == null || p.packet.startedAt() > latest.packet.startedAt())) latest = p;
+        }
+        return latest;
     }
 
     public static boolean localCasting() {
         var mc = Minecraft.getInstance();
         if (mc.player == null || mc.level == null) return false;
-        Presentation p = ACTIVE.get(mc.player.getUUID());
+        Presentation p = latestPresentation(mc.player.getUUID());
         return p != null && p.packet.stage() == WaterCurseNetwork.Stage.CHARGE
                 && p.packet.dimension().equals(mc.level.dimension().location())
                 && clientTicks - p.receivedAt <= 60 && mc.player.isAlive();
@@ -78,7 +100,7 @@ public final class WaterPurpleEffects {
     /** Animation time is tied to the server's casting timeline. */
     public static WaterPurpleAnimationTimeline.Sample animation(UUID player, float partialTick) {
         var mc = Minecraft.getInstance();
-        Presentation p = ACTIVE.get(player);
+        Presentation p = latestPresentation(player);
         return p == null || mc.level == null || !p.packet.dimension().equals(mc.level.dimension().location())
                 ? null : WaterPurpleAnimationTimeline.sample(p.elapsed() + partialTick, p.packet.duration(),
                 p.packet.stage() == WaterCurseNetwork.Stage.RELEASE);
@@ -109,21 +131,40 @@ public final class WaterPurpleEffects {
         ACTIVE.values().removeIf(p -> {
             long since = clientTicks - p.receivedAt;
             if ((p.packet.stage() == WaterCurseNetwork.Stage.CHARGE && since > 60)
-                    || (p.packet.stage() == WaterCurseNetwork.Stage.RELEASE && since > 40)) { p.stop(); return true; }
+                    || (p.packet.stage() == WaterCurseNetwork.Stage.RELEASE
+                    && since >= WaterPurpleRules.flightTicks(p.packet.duration()))) { p.stop(); return true; }
             p.music();
-            if (localCasting() && p.packet.caster().equals(mc.player.getUUID())) lockView(p);
+            if (p.packet.stage() == WaterCurseNetwork.Stage.CHARGE
+                    && localCasting() && p.packet.caster().equals(mc.player.getUUID())) lockView(p);
             if (p.packet.dimension().equals(dimension)) p.particles();
+            return false;
+        });
+        PLAYING_MUSIC.removeIf(sound -> {
+            if (!SscfeClientConfig.SPECIAL_MUSIC_ENABLED.get() || sound.isStopped() || sound.fadeFinished()) {
+                stopSound(sound); return true;
+            }
             return false;
         });
     }
 
     @SubscribeEvent public static void logout(ClientPlayerNetworkEvent.LoggingOut event) { clear(); }
-    private static void clear() { ACTIVE.values().forEach(Presentation::stop); ACTIVE.clear(); currentDimension = null; }
+    private static void clear() {
+        ACTIVE.values().forEach(Presentation::stop);
+        ACTIVE.clear();
+        PLAYING_MUSIC.forEach(WaterPurpleEffects::stopSound);
+        PLAYING_MUSIC.clear();
+        currentDimension = null;
+    }
+
+    private static void stopSound(WaterPurpleMusicSound sound) {
+        sound.stopImmediately();
+        Minecraft.getInstance().getSoundManager().stop(sound);
+    }
 
     @SubscribeEvent public static void hud(RenderGuiOverlayEvent.Post event) {
         if (!event.getOverlay().id().getPath().equals("hotbar") || !localCasting()) return;
         var mc = Minecraft.getInstance();
-        Presentation p = ACTIVE.get(mc.player.getUUID());
+        Presentation p = latestPresentation(mc.player.getUUID());
         double seconds = Math.max(0, p.packet.duration() - p.elapsed()) / 20D;
         event.getGuiGraphics().drawCenteredString(mc.font,
                 Component.translatable("hud.sscfe.water_purple", String.format(java.util.Locale.ROOT, "%.1f", seconds)),
@@ -195,7 +236,7 @@ public final class WaterPurpleEffects {
         final Vec3 side, up;
         final Vec3 lockedPosition;
         boolean musicEligible, musicAttempted;
-        SoundInstance music;
+        WaterPurpleMusicSound music;
         Presentation(WaterCurseNetwork.Effect packet) {
             this.packet = packet;
             var player = Minecraft.getInstance().player;
@@ -209,8 +250,7 @@ public final class WaterPurpleEffects {
         }
         Vec3 core(double elapsed) {
             if (packet.stage() == WaterCurseNetwork.Stage.CHARGE) return packet.origin().add(packet.direction().scale(3D));
-            double range = WaterPurpleRules.range(packet.duration());
-            return packet.origin().add(packet.direction().scale(Math.min(range, elapsed * 100D)));
+            return packet.origin().add(packet.direction().scale(WaterPurpleRules.travelDistance(packet.duration(), elapsed)));
         }
         void music() {
             if (music != null && !SscfeClientConfig.SPECIAL_MUSIC_ENABLED.get()) { stop(); return; }
@@ -223,11 +263,22 @@ public final class WaterPurpleEffects {
             var event = id == null ? null : manager.getSoundEvent(id);
             // The empty default sound definition deliberately provides a silent, clean fallback.
             if (event == null || event.getWeight() <= 0) return;
-            music = new SimpleSoundInstance(id, SoundSource.MUSIC, SscfeClientConfig.SPECIAL_MUSIC_VOLUME.get().floatValue(),
-                    1F, RandomSource.create(), false, 0, SoundInstance.Attenuation.NONE, 0D, 0D, 0D, true);
+            music = new WaterPurpleMusicSound(id, SscfeClientConfig.SPECIAL_MUSIC_VOLUME.get().floatValue(),
+                    SscfeClientConfig.MUSIC_FADE_IN_TICKS.get(), SscfeClientConfig.MUSIC_RELEASE_HOLD_TICKS.get(),
+                    SscfeClientConfig.MUSIC_FADE_OUT_TICKS.get(), () -> clientTicks);
+            PLAYING_MUSIC.add(music);
             manager.play(music);
         }
-        void stop() { if (music != null) { Minecraft.getInstance().getSoundManager().stop(music); music = null; } }
+        void releaseMusic() {
+            if (music != null) {
+                music.release();
+                // Keep the stream in PLAYING_MUSIC so visual cleanup cannot cut off the fade.
+                music = null;
+            }
+        }
+        void stop() {
+            if (music != null) { stopSound(music); PLAYING_MUSIC.remove(music); music = null; }
+        }
         void particles() {
             var mc = Minecraft.getInstance();
             double elapsed = elapsed();

@@ -46,8 +46,16 @@ public final class WaterCurseService {
     private static final Map<UUID, Long> LAST_CONFIGURE = new HashMap<>();
     private static final int MAX_BEAMS = 8;
 
+    public static boolean canUse(Player player) { return player.isCreative() || AxolotlWaterService.isAxolotl(player); }
+
     public static ItemStack accessory(Player player) {
-        if (!AxolotlWaterService.isAxolotl(player) || !ModList.get().isLoaded("curios")) return ItemStack.EMPTY;
+        if (!canUse(player)) return ItemStack.EMPTY;
+        // Creative testing also works with a held accessory, without a Curios slot.
+        if (player.isCreative()) {
+            if (player.getMainHandItem().is(ModWaterContent.WATER_CURSE.get())) return player.getMainHandItem();
+            if (player.getOffhandItem().is(ModWaterContent.WATER_CURSE.get())) return player.getOffhandItem();
+        }
+        if (!ModList.get().isLoaded("curios")) return ItemStack.EMPTY;
         return CuriosWaterCompat.equipped(player).stream().filter(stack -> stack.is(ModWaterContent.WATER_CURSE.get()))
                 .findFirst().orElse(ItemStack.EMPTY);
     }
@@ -73,12 +81,17 @@ public final class WaterCurseService {
     }
 
     private static void start(ServerPlayer player, ItemStack stack, int requestedTicks) {
-        if (player.isPassenger() || player.isSleeping() || player.isFallFlying()
-                || player.getCooldowns().isOnCooldown(ModWaterContent.WATER_CURSE.get())) return;
+        if (!player.isCreative() && (player.isPassenger() || player.isSleeping() || player.isFallFlying()
+                || player.getCooldowns().isOnCooldown(ModWaterContent.WATER_CURSE.get()))) return;
         int min = WaterCurseConfig.MIN_CAST_TICKS.get();
         int max = Math.max(min, WaterCurseConfig.MAX_CAST_TICKS.get());
         int ticks = Math.max(min, Math.min(max, requestedTicks));
         if (!canPay(player, ticks)) { insufficient(player); return; }
+        if (player.isCreative()) {
+            player.stopRiding();
+            if (player.isSleeping()) player.stopSleepInBed(false, true);
+            player.stopFallFlying();
+        }
         Cast cast = new Cast(player, stack, player.serverLevel(), player.position(), player.getLookAngle().normalize(),
                 player.getYRot(), player.getXRot(), player.level().getGameTime(), ticks, WaterCurseItem.special(stack));
         CASTS.put(player.getUUID(), cast);
@@ -89,11 +102,13 @@ public final class WaterCurseService {
     }
 
     public static boolean canPay(Player player, int ticks) {
+        if (player.isCreative()) return true;
         return player.getAirSupply() >= WaterPurpleRules.moistureCost(ticks, player.getMaxAirSupply())
                 && AxolotlWaterService.availableWater(player) >= WaterPurpleRules.waterCost(ticks);
     }
 
     public static boolean pay(Player player, int ticks) {
+        if (player.isCreative()) return true;
         if (!canPay(player, ticks) || !AxolotlWaterService.consumeWater(player, WaterPurpleRules.waterCost(ticks))) return false;
         player.setAirSupply(player.getAirSupply() - WaterPurpleRules.moistureCost(ticks, player.getMaxAirSupply()));
         return true;
@@ -149,7 +164,7 @@ public final class WaterCurseService {
                 BEAMS.add(new Beam(player, cast.level, origin, cast.direction, cast.duration));
                 broadcast(cast, WaterCurseNetwork.Stage.RELEASE);
                 cast.level.playSound(null, player.blockPosition(), ModWaterSounds.RELEASE.get(), SoundSource.PLAYERS, 3F, 0.65F);
-                player.getCooldowns().addCooldown(ModWaterContent.WATER_CURSE.get(), 200);
+                if (!player.isCreative()) player.getCooldowns().addCooldown(ModWaterContent.WATER_CURSE.get(), 200);
                 player.connection.teleport(cast.position.x, cast.position.y, cast.position.z, cast.yaw, cast.pitch);
             } else if (elapsed % 20 == 0) broadcast(cast, WaterCurseNetwork.Stage.CHARGE);
         }
@@ -165,23 +180,23 @@ public final class WaterCurseService {
     @SubscribeEvent(priority = EventPriority.HIGH)
     public static void waterCombat(LivingHurtEvent event) {
         if (event.getEntity().level().isClientSide || event.getAmount() <= 0F) return;
-        if (event.getEntity() instanceof Player victim) {
-            ItemStack charm = accessory(victim);
-            if (!charm.isEmpty() && WaterCurseItem.enabled(charm, WaterCurseItem.Mode.SHIELD) && victim.getAirSupply() >= 1) {
-                float reduced = WaterPurpleRules.shieldDamage(event.getAmount());
-                victim.setAirSupply(victim.getAirSupply() - 1);
-                event.setAmount(reduced);
-                splash(victim);
-            }
-        }
         if (event.getSource().getEntity() instanceof Player attacker && event.getSource().is(DamageTypes.PLAYER_ATTACK)) {
             ItemStack charm = accessory(attacker);
             WaterCurseItem.Mode mode = attacker.getMainHandItem().isEmpty() ? WaterCurseItem.Mode.FIST : WaterCurseItem.Mode.WEAPON;
-            if (!charm.isEmpty() && WaterCurseItem.enabled(charm, mode) && attacker.getAirSupply() >= 1) {
-                attacker.setAirSupply(attacker.getAirSupply() - 1);
+            if (!charm.isEmpty() && WaterCurseItem.enabled(charm, mode) && (attacker.isCreative() || attacker.getAirSupply() >= 1)) {
+                if (!attacker.isCreative()) attacker.setAirSupply(attacker.getAirSupply() - 1);
                 float multiplier = event.getEntity() instanceof Blaze || event.getEntity() instanceof MagmaCube ? 2.5F : 1.5F;
                 event.setAmount(event.getAmount() * multiplier);
                 splash(event.getEntity());
+            }
+        }
+        if (event.getEntity() instanceof Player victim) {
+            ItemStack charm = accessory(victim);
+            if (!charm.isEmpty() && WaterCurseItem.enabled(charm, WaterCurseItem.Mode.SHIELD) && (victim.isCreative() || victim.getAirSupply() >= 1)) {
+                float reduced = WaterPurpleRules.shieldDamage(event.getAmount());
+                if (!victim.isCreative()) victim.setAirSupply(victim.getAirSupply() - 1);
+                event.setAmount(reduced);
+                splash(victim);
             }
         }
     }
@@ -222,39 +237,45 @@ public final class WaterCurseService {
     private record Cast(ServerPlayer player, ItemStack stack, ServerLevel level, Vec3 position, Vec3 direction,
                         float yaw, float pitch, long startedAt, int duration, boolean special) {}
 
-    /** Damage lasts one second; terrain work is amortized separately over a finite loaded ray. */
-    private static final class Beam {
+    /** Sweep the moving core each tick; budgeted terrain work cannot run ahead of it. */
+    static final class Beam {
         final ServerPlayer player;
         final ServerLevel level;
         final Vec3 origin, direction, side, up;
-        final int duration, radius, width;
+        final int duration, radius, width, flightTicks;
         final double range;
-        final AABB bounds;
         int age, cursor;
         Beam(ServerPlayer player, ServerLevel level, Vec3 origin, Vec3 direction, int duration) {
             this.player = player; this.level = level; this.origin = origin; this.direction = direction; this.duration = duration;
             range = WaterPurpleRules.range(duration); radius = WaterPurpleRules.breakRadius(duration); width = radius * 2 + 1;
             side = direction.cross(Math.abs(direction.y) > 0.95D ? new Vec3(1, 0, 0) : new Vec3(0, 1, 0)).normalize();
             up = side.cross(direction).normalize();
-            bounds = new AABB(origin, origin.add(direction.scale(range))).inflate(WaterPurpleRules.damageRadius(duration));
+            flightTicks = WaterPurpleRules.flightTicks(duration);
         }
         boolean tick(int budget) {
             if (player.isRemoved() || player.level() != level) return true;
-            if (age++ < 20) {
+            double previousDistance = WaterPurpleRules.travelDistance(duration, age);
+            double distance = WaterPurpleRules.travelDistance(duration, ++age);
+            if (age <= flightTicks) {
                 double hitRadius = WaterPurpleRules.damageRadius(duration);
+                Vec3 previousCore = origin.add(direction.scale(previousDistance));
+                Vec3 core = origin.add(direction.scale(distance));
+                AABB bounds = new AABB(previousCore, core).inflate(hitRadius);
                 for (LivingEntity target : level.getEntitiesOfClass(LivingEntity.class, bounds,
                         target -> target != player && target.isAlive() && !target.isSpectator())) {
                     if (target instanceof Player other && !player.canHarmPlayer(other)) continue;
-                    if (WaterPurpleRules.distanceToRaySquared(target.getBoundingBox().getCenter(), origin, direction, range) > hitRadius * hitRadius) continue;
+                    if (WaterPurpleRules.distanceToRaySquared(target.getBoundingBox().getCenter(), previousCore, direction,
+                            distance - previousDistance) > hitRadius * hitRadius) continue;
                     int invulnerable = target.invulnerableTime;
                     target.invulnerableTime = 0;
                     target.hurt(level.damageSources().indirectMagic(player, player), WaterPurpleRules.damagePerTick(duration));
                     target.invulnerableTime = invulnerable;
                 }
             }
-            if (!WaterCurseConfig.BREAK_BLOCKS.get() || !player.mayBuild()) return age >= 20;
-            int total = ((int) Math.ceil(range) + 1) * width * width;
-            for (int i = 0; i < budget && cursor < total; i++, cursor++) {
+            if (!WaterCurseConfig.BREAK_BLOCKS.get() || !player.mayBuild()) return age >= flightTicks;
+            int total = ((int) Math.floor(range) + 1) * width * width;
+            int reached = Math.min(total, ((int) Math.floor(distance) + 1) * width * width);
+            for (int i = 0; i < budget && cursor < reached; i++, cursor++) {
                 int along = cursor / (width * width);
                 int x = (cursor / width) % width - radius;
                 int y = cursor % width - radius;
@@ -270,7 +291,7 @@ public final class WaterCurseService {
                     Block.dropResources(state, level, pos, null, player, player.getMainHandItem());
                 level.setBlock(pos, net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), 2);
             }
-            return age >= 20 && cursor >= total;
+            return age >= flightTicks && cursor >= total;
         }
     }
     private WaterCurseService() {}

@@ -24,7 +24,12 @@ public final class CuriosWaterCompat {
         CuriosApi.registerCurio(ModWaterContent.MOISTURIZER.get(), accessory);
         CuriosApi.registerCurio(ModWaterContent.LARGE_WATER_TANK.get(), accessory);
         CuriosApi.registerCurio(ModWaterContent.WATER_AS_FOOD.get(), accessory);
-        CuriosApi.registerCurio(ModWaterContent.WATER_CURSE.get(), accessory);
+        CuriosApi.registerCurio(ModWaterContent.WATER_CURSE.get(), new ICurioItem() {
+            @Override
+            public boolean canEquip(SlotContext context, ItemStack stack) {
+                return context.entity() instanceof Player player && WaterCurseService.canUse(player);
+            }
+        });
     }
 
     public static List<ItemStack> equipped(Player player) {

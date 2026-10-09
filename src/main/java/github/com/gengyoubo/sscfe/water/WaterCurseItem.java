@@ -30,7 +30,7 @@ public final class WaterCurseItem extends Item {
     public static boolean special(ItemStack stack) { return stack.getOrCreateTag().getBoolean("WaterPurpleSpecial"); }
 
     public static void configure(Player player, ItemStack stack) {
-        if (!AxolotlWaterService.isAxolotl(player)) return;
+        if (!WaterCurseService.canUse(player)) return;
         WaterCurseService.cancel(player);
         if (player.isShiftKeyDown()) {
             stack.getOrCreateTag().putInt("WaterCurseMode", (mode(stack).ordinal() + 1) % Mode.values().length);
@@ -54,7 +54,7 @@ public final class WaterCurseItem extends Item {
     @Override
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
         ItemStack stack = player.getItemInHand(hand);
-        if (!AxolotlWaterService.isAxolotl(player)) return InteractionResultHolder.fail(stack);
+        if (!WaterCurseService.canUse(player)) return InteractionResultHolder.fail(stack);
         if (!level.isClientSide) configure(player, stack);
         return InteractionResultHolder.sidedSuccess(stack, level.isClientSide);
     }
@@ -64,5 +64,6 @@ public final class WaterCurseItem extends Item {
         lines.add(status(stack));
         lines.add(Component.translatable("item.sscfe.water_curse.controls"));
         lines.add(Component.translatable("item.sscfe.water_curse.costs"));
+        lines.add(Component.translatable("item.sscfe.water_curse.creative"));
     }
 }

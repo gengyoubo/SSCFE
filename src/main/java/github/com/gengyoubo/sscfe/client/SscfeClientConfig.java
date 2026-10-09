@@ -28,6 +28,15 @@ public final class SscfeClientConfig {
             .comment("Delay music after cast begins. This delays playback; it does not seek inside an OGG stream.",
                     "Trim the OGG externally to start at a particular part of the song.")
             .defineInRange("water_purple_special.music_start_delay_ticks", 0, 0, 12000);
+    public static final ForgeConfigSpec.IntValue MUSIC_FADE_IN_TICKS = BUILDER
+            .comment("Fade music in when chanting starts. 40 ticks = 2 seconds; 0 disables fade-in.")
+            .defineInRange("water_purple_special.music_fade_in_ticks", 40, 0, 1200);
+    public static final ForgeConfigSpec.IntValue MUSIC_RELEASE_HOLD_TICKS = BUILDER
+            .comment("Continue the same music after firing, before starting fade-out. 40 ticks = 2 seconds.")
+            .defineInRange("water_purple_special.music_release_hold_ticks", 40, 0, 1200);
+    public static final ForgeConfigSpec.IntValue MUSIC_FADE_OUT_TICKS = BUILDER
+            .comment("Fade music out after the release hold. 60 ticks = 3 seconds; interruptions still stop immediately.")
+            .defineInRange("water_purple_special.music_fade_out_ticks", 60, 0, 1200);
     public static final ForgeConfigSpec.IntValue EFFECT_PARTICLES = BUILDER
             .comment("Particle budget per visible cast per tick. Blue cores and water vortices use built-in particles.")
             .defineInRange("water_purple.particles_per_tick", 64, 8, 192);

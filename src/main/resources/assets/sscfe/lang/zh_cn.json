@@ -821,6 +821,7 @@
   "item.sscfe.water_curse": "水的咒力",
   "item.sscfe.water_curse.controls": "美西螈护符：Shift＋右键切换模式，右键开关／切换茈版本；点击 V 施法，再次点击取消",
   "item.sscfe.water_curse.costs": "水伤／水盾每次耗 1 湿润度；满威力茈耗 32 B 水＋最大湿润度的 50%；打断不扣释放费用",
+  "item.sscfe.water_curse.creative": "创造模式：任意形态可手持或装备使用，无资源消耗、冷却和姿态要求",
   "message.sscfe.water_curse.mode": "水的咒力：%s · %s",
   "message.sscfe.water_curse.resources": "储罐水量或湿润度不足，无法释放本次水·茈",
   "message.sscfe.water_curse.busy": "正在处理的水·茈过多，本次取消且不扣费",

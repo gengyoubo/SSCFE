@@ -27,6 +27,7 @@
   "item.sscfe.water_curse": "Water Curse",
   "item.sscfe.water_curse.controls": "Axolotl charm: Shift + right-click changes mode; right-click toggles or selects Purple variant. Click V to cast, again to cancel",
   "item.sscfe.water_curse.costs": "Water combat/shield: 1 moisture per hit. Full Purple: 32 B + 50% max moisture; interrupted casts cost nothing",
+  "item.sscfe.water_curse.creative": "Creative: use in any form, held or equipped; no resource costs, cooldown or stance requirements",
   "message.sscfe.water_curse.mode": "Water Curse: %s · %s",
   "message.sscfe.water_curse.resources": "Not enough tank water or moisture for this Water Purple cast",
   "message.sscfe.water_curse.busy": "Too many active Water Purple beams; cast cancelled without payment",

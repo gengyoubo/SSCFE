@@ -3,6 +3,7 @@ package github.com.gengyoubo.sscfe.water;
 import com.mojang.authlib.GameProfile;
 import github.com.gengyoubo.sscfe.Sscfe;
 import github.com.gengyoubo.sscfe.init.ModWaterContent;
+import github.com.gengyoubo.sscfe.sound.WaterPurpleMusicEnvelope;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTest;
@@ -40,6 +41,150 @@ import java.util.UUID;
 @GameTestHolder(Sscfe.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class WaterFeatureGameTests {
+    @GameTest(template = "empty")
+    public static void purpleTravelsAtOneHundredBlocksPerSecond(GameTestHelper helper) {
+        helper.assertTrue(WaterPurpleRules.travelDistance(600, 1) == 5D
+                && WaterPurpleRules.travelDistance(600, 20) == 100D
+                && WaterPurpleRules.travelDistance(600, 599) == 2995D,
+                "The core travels five blocks per tick, or one hundred blocks per second");
+        helper.assertTrue(WaterPurpleRules.flightTicks(600) == 600
+                && WaterPurpleRules.travelDistance(600, 600) == 3000D
+                && WaterPurpleRules.travelDistance(600, 800) == 3000D,
+                "Full range takes thirty seconds and movement stops at the range limit");
+        helper.assertTrue(WaterPurpleRules.flightTicks(60) == 60
+                && WaterPurpleRules.travelDistance(60, 60) == 300D
+                && WaterPurpleRules.flightTicks(1140) == 600,
+                "Reduced range finishes sooner; longer chanting does not alter projectile speed or range");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void purpleDamageAndTerrainFollowTheCore(GameTestHelper helper) {
+        var level = helper.getLevel();
+        ServerPlayer player = new net.minecraftforge.common.util.FakePlayer(level,
+                new GameProfile(UUID.randomUUID(), "moving-purple-test"));
+        BlockPos originBlock = helper.absolutePos(BlockPos.ZERO).atY(240);
+        Vec3 origin = Vec3.atCenterOf(originBlock);
+        player.setPos(origin.x, origin.y, origin.z);
+        var target = net.minecraft.world.entity.EntityType.HUSK.create(level);
+        helper.assertTrue(target != null, "Moving-core test target exists");
+        target.setNoAi(true); target.setNoGravity(true);
+        target.setPos(origin.x, origin.y + 20, origin.z);
+        level.addFreshEntity(target);
+        BlockPos terrain = originBlock.above(35);
+        level.setBlock(terrain, Blocks.STONE.defaultBlockState(), 2);
+        var beam = new WaterCurseService.Beam(player, level, origin, new Vec3(0, 1, 0), 60);
+        try {
+            float health = target.getHealth();
+            helper.assertTrue(!beam.tick(8192) && target.getHealth() == health
+                    && level.getBlockState(terrain).is(Blocks.STONE),
+                    "The first tick cannot damage or destroy distant parts of the ray");
+            beam.tick(8192); beam.tick(8192);
+            helper.assertTrue(target.getHealth() == health, "Damage waits for the travelling core to arrive");
+            beam.tick(8192);
+            helper.assertTrue(target.getHealth() < health, "A swept core hits at twenty blocks on tick four");
+            beam.tick(8192); beam.tick(8192);
+            helper.assertTrue(level.getBlockState(terrain).is(Blocks.STONE), "Terrain thirty-five blocks away survives through tick six");
+            beam.tick(8192);
+            helper.assertTrue(level.getBlockState(terrain).isAir(), "Terrain breaks when the front reaches thirty-five blocks on tick seven");
+            for (int tick = 8; tick < 60; tick++) {
+                helper.assertTrue(!beam.tick(8192), "The beam remains active until its full flight completes");
+            }
+            helper.assertTrue(beam.tick(8192), "The three-hundred-block ray completes on tick sixty");
+        } finally {
+            target.discard();
+            level.setBlock(terrain, Blocks.AIR.defaultBlockState(), 2);
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void musicFadesInAndContinuesAfterRelease(GameTestHelper helper) {
+        var music = new WaterPurpleMusicEnvelope(0, 40, 40, 60);
+        helper.assertTrue(music.gain(0) == 0F && music.gain(20) == 0.5F && music.gain(40) == 1F,
+                "Chanting music fades from silence to full volume over two seconds");
+        music.release(600);
+        helper.assertTrue(music.gain(600) == 1F && music.gain(639) == 1F && music.gain(640) == 1F,
+                "Release continues the same music for two seconds before fading");
+        helper.assertTrue(music.gain(670) == 0.5F && !music.finished(670)
+                && music.gain(700) == 0F && music.finished(700), "Music fades out over three seconds after the hold");
+        music.release(680);
+        helper.assertTrue(music.finished(700), "Duplicate release cannot restart the fade");
+        var shortCast = new WaterPurpleMusicEnvelope(0, 100, 0, 20);
+        shortCast.release(50);
+        helper.assertTrue(shortCast.gain(50) == 0.5F && shortCast.gain(60) == 0.25F && shortCast.finished(70),
+                "Release during fade-in fades from the actual volume without jumping to full volume");
+        var immediate = new WaterPurpleMusicEnvelope(0, 0, 0, 0);
+        helper.assertTrue(immediate.gain(0) == 1F, "Zero fade-in starts at configured volume");
+        immediate.release(10);
+        helper.assertTrue(immediate.gain(10) == 0F && immediate.finished(10), "Zero hold and fade-out stop at release");
+        var nextCast = new WaterPurpleMusicEnvelope(610, 40, 40, 60);
+        helper.assertTrue(nextCast.gain(630) == 0.5F && music.gain(670) == 0.5F,
+                "A new cast has an independent envelope while the previous cast fades out");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void creativeCurseIgnoresFormAndResourceCosts(GameTestHelper helper) {
+        TestPlayer player = new TestPlayer(helper.getLevel());
+        player.creative = true;
+        helper.assertTrue(!AxolotlWaterService.isAxolotl(player), "Creative test uses a non-axolotl form");
+        ItemStack charm = new ItemStack(ModWaterContent.WATER_CURSE.get());
+        player.setItemInHand(InteractionHand.MAIN_HAND, charm);
+        player.setAirSupply(0);
+        helper.assertTrue(WaterCurseService.accessory(player) == charm, "Creative held charm needs no Curios equipment");
+        helper.assertTrue(WaterCurseService.canPay(player, 600) && WaterCurseService.pay(player, 600)
+                && player.getAirSupply() == 0 && AxolotlWaterService.availableWater(player) == 0,
+                "Creative full-power payment succeeds without a tank or moisture and consumes nothing");
+        charm.getOrCreateTag().putInt("WaterCurseMode", WaterCurseItem.Mode.SHIELD.ordinal());
+        WaterCurseItem.configure(player, charm);
+        helper.assertTrue(WaterCurseItem.enabled(charm, WaterCurseItem.Mode.SHIELD), "Creative non-axolotl can configure charm");
+        var shield = new LivingHurtEvent(player, player.damageSources().generic(), 15F);
+        WaterCurseService.waterCombat(shield);
+        helper.assertTrue(shield.getAmount() == 9F && player.getAirSupply() == 0, "Creative shield works without moisture");
+        charm.getOrCreateTag().putInt("WaterCurseEnabledModes", 1 << WaterCurseItem.Mode.WEAPON.ordinal());
+        TestPlayer target = axolotl(helper);
+        var attack = new LivingHurtEvent(target, target.damageSources().playerAttack(player), 4F);
+        WaterCurseService.waterCombat(attack);
+        helper.assertTrue(attack.getAmount() == 6F && player.getAirSupply() == 0, "Creative water attack works without moisture");
+        player.creative = false;
+        helper.assertTrue(WaterCurseService.accessory(player).isEmpty() && !WaterCurseService.canPay(player, 600)
+                && !WaterCurseService.pay(player, 600), "Survival restores form, equipment and resource requirements");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 100)
+    public static void creativeLockedCastIgnoresCooldownAndStance(GameTestHelper helper) {
+        ServerPlayer player = new net.minecraftforge.common.util.FakePlayer(helper.getLevel(),
+                new GameProfile(UUID.randomUUID(), "creative-purple-test")) {
+            @Override public boolean isCreative() { return true; }
+        };
+        helper.assertTrue(!AxolotlWaterService.isAxolotl(player), "Creative cast uses a non-axolotl form");
+        ItemStack charm = new ItemStack(ModWaterContent.WATER_CURSE.get());
+        charm.getOrCreateTag().putInt("WaterCurseMode", WaterCurseItem.Mode.PURPLE.ordinal());
+        player.setItemInHand(InteractionHand.MAIN_HAND, charm);
+        player.setAirSupply(0);
+        player.setPos(0, 240, 0); player.setYRot(0); player.setXRot(-90F);
+        player.getCooldowns().addCooldown(ModWaterContent.WATER_CURSE.get(), 4000);
+        var boat = net.minecraft.world.entity.EntityType.BOAT.create(helper.getLevel());
+        helper.assertTrue(boat != null, "Creative test boat exists");
+        boat.setPos(0, 240, 0);
+        helper.assertTrue(player.startRiding(boat, true), "Creative test begins while riding");
+        WaterCurseService.input(player, WaterCurseNetwork.Action.START, 60);
+        helper.assertTrue(WaterCurseService.casting(player) && !player.isPassenger(),
+                "Creative starts with no resources despite cooldown and riding, then dismounts for locking");
+        player.getCooldowns().removeCooldown(ModWaterContent.WATER_CURSE.get());
+        helper.runAfterDelay(64, () -> {
+            helper.assertTrue(!WaterCurseService.casting(player) && player.getAirSupply() == 0
+                    && AxolotlWaterService.availableWater(player) == 0, "Creative automatically fires without resource consumption");
+            helper.assertTrue(!player.getCooldowns().isOnCooldown(ModWaterContent.WATER_CURSE.get()), "Creative release adds no cooldown");
+            WaterCurseService.input(player, WaterCurseNetwork.Action.START, 60);
+            helper.assertTrue(WaterCurseService.casting(player), "Creative can immediately cast again");
+            WaterCurseService.logout(new net.minecraftforge.event.entity.player.PlayerEvent.PlayerLoggedOutEvent(player));
+            helper.succeed();
+        });
+    }
+
     @GameTest(template = "empty")
     public static void purpleAnimationEndsAtFiring(GameTestHelper helper) {
         var early = WaterPurpleAnimationTimeline.sample(559, 600, false);
@@ -120,6 +265,15 @@ public final class WaterFeatureGameTests {
         var large = new LivingHurtEvent(player, player.damageSources().generic(), 15F);
         WaterCurseService.waterCombat(large);
         helper.assertTrue(large.getAmount() == 9F && player.getAirSupply() == 98, "Shield subtracts five then reduces the remainder ten percent");
+        TestPlayer attacker = axolotl(helper);
+        ItemStack fist = new ItemStack(ModWaterContent.WATER_CURSE.get());
+        fist.getOrCreateTag().putInt("WaterCurseEnabledModes", 1 << WaterCurseItem.Mode.FIST.ordinal());
+        equip(attacker, "charm", fist);
+        attacker.setAirSupply(100);
+        var waterPunch = new LivingHurtEvent(player, player.damageSources().playerAttack(attacker), 6F);
+        WaterCurseService.waterCombat(waterPunch);
+        helper.assertTrue(Math.abs(waterPunch.getAmount() - 3.6F) < 0.0001F && attacker.getAirSupply() == 99,
+                "Water attack multiplier applies before shield reduction");
         player.setAirSupply(0);
         var dry = new LivingHurtEvent(player, player.damageSources().generic(), 5F);
         WaterCurseService.waterCombat(dry);
@@ -388,8 +542,9 @@ public final class WaterFeatureGameTests {
 
     private static final class TestPlayer extends Player {
         private boolean inWater;
+        private boolean creative;
         private TestPlayer(Level level) { super(level, BlockPos.ZERO, 0, new GameProfile(UUID.randomUUID(), "water-test")); }
-        @Override public boolean isCreative() { return false; }
+        @Override public boolean isCreative() { return creative; }
         @Override public boolean isSpectator() { return false; }
         @Override public boolean isInWater() { return inWater; }
     }
