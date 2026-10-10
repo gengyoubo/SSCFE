@@ -20,7 +20,7 @@ import java.util.function.Supplier;
 
 public final class WaterCurseNetwork {
     private static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
-            ResourceLocation.fromNamespaceAndPath(Sscfe.MOD_ID, "water_curse"), () -> "2", "2"::equals, "2"::equals);
+            ResourceLocation.fromNamespaceAndPath(Sscfe.MOD_ID, "water_curse"), () -> "3", "3"::equals, "3"::equals);
     public enum Action { START, RELEASE, CANCEL, CONFIGURE }
     public enum Stage { CHARGE, RELEASE, CANCEL }
 
@@ -33,9 +33,10 @@ public final class WaterCurseNetwork {
 
     public static void input(Action action, int duration) { CHANNEL.sendToServer(new Input(action, duration)); }
 
-    public static Effect effect(ServerPlayer player, Stage stage, boolean special, long startedAt, int duration, Vec3 origin, Vec3 direction) {
+    public static Effect effect(ServerPlayer player, Stage stage, boolean special, long startedAt, int duration,
+                                Vec3 casterPosition, Vec3 origin, Vec3 direction) {
         return new Effect(player.getUUID(), player.level().dimension().location(), stage, special, startedAt,
-                player.level().getGameTime(), duration, origin, direction);
+                player.level().getGameTime(), duration, casterPosition, origin, direction);
     }
 
     public static void broadcast(ServerPlayer player, Effect effect) {
@@ -61,15 +62,15 @@ public final class WaterCurseNetwork {
 
     /** Origin is the authoritative charge core, also used as the projectile's starting point. */
     public record Effect(UUID caster, ResourceLocation dimension, Stage stage, boolean special,
-                         long startedAt, long serverNow, int duration, Vec3 origin, Vec3 direction) {
+                         long startedAt, long serverNow, int duration, Vec3 casterPosition, Vec3 origin, Vec3 direction) {
         static void encode(Effect value, FriendlyByteBuf buf) {
             buf.writeUUID(value.caster); buf.writeResourceLocation(value.dimension); buf.writeEnum(value.stage);
             buf.writeBoolean(value.special); buf.writeLong(value.startedAt); buf.writeLong(value.serverNow); buf.writeVarInt(value.duration);
-            writeVec(buf, value.origin); writeVec(buf, value.direction);
+            writeVec(buf, value.casterPosition); writeVec(buf, value.origin); writeVec(buf, value.direction);
         }
         static Effect decode(FriendlyByteBuf buf) {
             return new Effect(buf.readUUID(), buf.readResourceLocation(), buf.readEnum(Stage.class),
-                    buf.readBoolean(), buf.readLong(), buf.readLong(), buf.readVarInt(), readVec(buf), readVec(buf));
+                    buf.readBoolean(), buf.readLong(), buf.readLong(), buf.readVarInt(), readVec(buf), readVec(buf), readVec(buf));
         }
         static void handle(Effect value, Supplier<NetworkEvent.Context> supplier) {
             var context = supplier.get();

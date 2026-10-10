@@ -40,6 +40,9 @@ public final class SscfeClientConfig {
     public static final ForgeConfigSpec.IntValue EFFECT_PARTICLES = BUILDER
             .comment("Particle budget per visible cast per tick. Blue cores and water vortices use built-in particles.")
             .defineInRange("water_purple.particles_per_tick", 64, 8, 192);
+    public static final ForgeConfigSpec.IntValue CHARGE_AURA_HEIGHT = BUILDER
+            .comment("Maximum height of the irregular charging aura in blocks. Aura particles share the existing particle budget.")
+            .defineInRange("water_purple.charge_aura_height", 32, 20, 40);
     public static final ForgeConfigSpec.IntValue EFFECT_RENDER_DISTANCE = BUILDER
             .comment("Maximum core geometry distance in blocks. The game's view distance and projection still apply.",
                     "Distance culling only skips drawing; the projectile keeps its flight state.")

@@ -179,12 +179,22 @@ public final class WaterPurpleEffects {
         Vec3 camera = event.getCamera().getPosition();
         poses.pushPose(); poses.translate(-camera.x, -camera.y, -camera.z);
         var buffer = mc.renderBuffers().bufferSource();
+        var smoke = buffer.getBuffer(WaterPurpleAuraRenderer.SMOKE);
+        double renderDistance = SscfeClientConfig.EFFECT_RENDER_DISTANCE.get();
+        for (Presentation p : ACTIVE.values()) {
+            if (p.packet.stage() != WaterCurseNetwork.Stage.CHARGE
+                    || !p.packet.dimension().equals(mc.level.dimension().location())
+                    || p.packet.casterPosition().distanceToSqr(camera) > renderDistance * renderDistance) continue;
+            WaterPurpleAuraRenderer.render(smoke, poses.last().pose(), event.getCamera(), p.packet.casterPosition(),
+                    p.elapsed() + event.getPartialTick(), p.packet.duration(), p.auraSeed());
+        }
+        // Finish each render type before acquiring the next fallback buffer.
+        buffer.endBatch(WaterPurpleAuraRenderer.SMOKE);
         var vertices = buffer.getBuffer(RenderType.lightning());
         for (Presentation p : ACTIVE.values()) {
             if (!p.packet.dimension().equals(mc.level.dimension().location())) continue;
             double elapsed = p.elapsed() + event.getPartialTick();
             Vec3 core = p.core(elapsed);
-            double renderDistance = SscfeClientConfig.EFFECT_RENDER_DISTANCE.get();
             if (core.distanceToSqr(camera) > renderDistance * renderDistance) continue;
             double growth = Math.min(1D, elapsed / 600D);
             double size = p.packet.stage() == WaterCurseNetwork.Stage.RELEASE
@@ -241,7 +251,7 @@ public final class WaterPurpleEffects {
         Presentation(WaterCurseNetwork.Effect packet) {
             this.packet = packet;
             var player = Minecraft.getInstance().player;
-            lockedPosition = player != null && packet.caster().equals(player.getUUID()) ? player.position() : null;
+            lockedPosition = player != null && packet.caster().equals(player.getUUID()) ? packet.casterPosition() : null;
             side = packet.direction().cross(Math.abs(packet.direction().y) > 0.95D ? new Vec3(1, 0, 0) : new Vec3(0, 1, 0)).normalize();
             up = side.cross(packet.direction()).normalize();
         }
@@ -253,6 +263,7 @@ public final class WaterPurpleEffects {
             if (packet.stage() == WaterCurseNetwork.Stage.CHARGE) return packet.origin();
             return packet.origin().add(packet.direction().scale(WaterPurpleRules.travelDistance(packet.duration(), elapsed)));
         }
+        long auraSeed() { return packet.caster().getLeastSignificantBits() ^ packet.startedAt(); }
         void music() {
             if (music != null && !SscfeClientConfig.SPECIAL_MUSIC_ENABLED.get()) { stop(); return; }
             if (!musicEligible || musicAttempted || packet.stage() != WaterCurseNetwork.Stage.CHARGE
@@ -286,27 +297,26 @@ public final class WaterPurpleEffects {
             Vec3 core = core(elapsed);
             Vec3 camera = mc.gameRenderer.getMainCamera().getPosition();
             double particleDistance = SscfeClientConfig.PARTICLE_RENDER_DISTANCE.get();
-            if (core.distanceToSqr(camera) > particleDistance * particleDistance) return;
+            boolean coreVisible = core.distanceToSqr(camera) <= particleDistance * particleDistance;
+            boolean auraVisible = packet.stage() == WaterCurseNetwork.Stage.CHARGE
+                    && packet.casterPosition().distanceToSqr(camera) <= particleDistance * particleDistance;
+            if (!coreVisible && !auraVisible) return;
             double growth = Math.min(1D, elapsed / 600D);
             double radius = packet.stage() == WaterCurseNetwork.Stage.RELEASE
                     ? 2D + 6D * WaterPurpleRules.power(packet.duration()) : 1D + 10D * growth;
             int count = SscfeClientConfig.EFFECT_PARTICLES.get();
-            for (int i = 0; i < count; i++) {
-                double angle = elapsed * 0.08D + i * Math.PI * 2 / count;
+            int auraCount = auraVisible ? count * 3 / 4 : 0;
+            if (auraCount > 0) WaterPurpleAuraRenderer.particles(mc.level, packet.casterPosition(), elapsed,
+                    packet.duration(), auraSeed(), auraCount);
+            int coreCount = coreVisible ? count - auraCount : 0;
+            for (int i = 0; i < coreCount; i++) {
+                double angle = elapsed * 0.08D + i * Math.PI * 2 / coreCount;
                 double height = (i % 8) * 0.65D;
                 Vec3 radial = side.scale(Math.cos(angle)).add(up.scale(Math.sin(angle)));
                 Vec3 point = core.add(radial.scale(radius)).add(0, height, 0);
                 Vec3 velocity = radial.scale(-0.12D).add(packet.direction().scale(0.04D));
                 mc.level.addParticle(i % 3 == 0 ? ParticleTypes.SPLASH : i % 2 == 0 ? BLUE : CYAN,
                         true, point.x, point.y, point.z, velocity.x, velocity.y, velocity.z);
-            }
-            // A vertical water column exposes the caster without transmitting their coordinates in chat.
-            if (packet.stage() == WaterCurseNetwork.Stage.CHARGE && growth > 0.3D) {
-                for (int i = 0; i < 8; i++) {
-                    double angle = elapsed * 0.06D + i;
-                    Vec3 point = packet.origin().add(Math.cos(angle) * 3D, i * 4D * growth, Math.sin(angle) * 3D);
-                    mc.level.addParticle(CYAN, true, point.x, point.y, point.z, 0, 0.2D, 0);
-                }
             }
         }
     }

@@ -1,6 +1,9 @@
 package github.com.gengyoubo.sscfe.water;
 
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.core.BlockPos;
+
+import java.util.Arrays;
 
 /** Shared numerical rules; presentation timing never grants extra power above 30 seconds. */
 public final class WaterPurpleRules {
@@ -27,6 +30,44 @@ public final class WaterPurpleRules {
     public static double distanceToRaySquared(Vec3 point, Vec3 origin, Vec3 direction, double range) {
         double along = Math.max(0D, Math.min(range, point.subtract(origin).dot(direction)));
         return point.distanceToSqr(origin.add(direction.scale(along)));
+    }
+
+    /** First distance where a moving sphere touches the block's full unit cube; infinity means no intersection. */
+    static double blockEntryDistance(BlockPos block, Vec3 origin, Vec3 direction, double range, double radius) {
+        double[] starts = {origin.x - block.getX(), origin.y - block.getY(), origin.z - block.getZ()};
+        double[] velocities = {direction.x, direction.y, direction.z};
+        double[] cuts = new double[8];
+        cuts[0] = 0D; cuts[1] = range;
+        int count = 2;
+        // Box distance is quadratic between crossings of its six face planes.
+        for (int axis = 0; axis < 3; axis++) {
+            if (Math.abs(velocities[axis]) < 1E-12D) continue;
+            for (int face = 0; face <= 1; face++) {
+                double t = (face - starts[axis]) / velocities[axis];
+                if (t > 0D && t < range) cuts[count++] = t;
+            }
+        }
+        Arrays.sort(cuts, 0, count);
+        for (int interval = 0; interval < count - 1; interval++) {
+            double low = cuts[interval], high = cuts[interval + 1];
+            double middle = (low + high) * 0.5D;
+            double a = 0D, b = 0D, c = -radius * radius;
+            for (int axis = 0; axis < 3; axis++) {
+                double coordinate = starts[axis] + velocities[axis] * middle;
+                if (coordinate >= 0D && coordinate <= 1D) continue;
+                double delta = starts[axis] + velocities[axis] * low - (coordinate < 0D ? 0D : 1D);
+                a += velocities[axis] * velocities[axis];
+                b += delta * velocities[axis];
+                c += delta * delta;
+            }
+            if (c <= 1E-9D) return low;
+            if (a < 1E-24D) continue;
+            double discriminant = b * b - a * c;
+            if (discriminant < -1E-9D) continue;
+            double root = (-b - Math.sqrt(Math.max(0D, discriminant))) / a;
+            if (root >= -1E-9D && root <= high - low + 1E-9D) return Math.min(high, low + Math.max(0D, root));
+        }
+        return Double.POSITIVE_INFINITY;
     }
     private WaterPurpleRules() {}
 }

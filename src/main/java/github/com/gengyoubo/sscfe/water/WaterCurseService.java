@@ -128,7 +128,7 @@ public final class WaterCurseService {
 
     private static void broadcast(Cast cast, WaterCurseNetwork.Stage stage) {
         WaterCurseNetwork.broadcast(cast.player, WaterCurseNetwork.effect(cast.player, stage, cast.special,
-                cast.startedAt, cast.duration, cast.origin, cast.direction));
+                cast.startedAt, cast.duration, cast.position, cast.origin, cast.direction));
     }
 
     public static void cancel(Player player) {
@@ -219,7 +219,7 @@ public final class WaterCurseService {
     @SubscribeEvent public static void login(PlayerEvent.PlayerLoggedInEvent event) {
         if (event.getEntity() instanceof ServerPlayer receiver) for (Cast cast : CASTS.values())
             WaterCurseNetwork.send(receiver, WaterCurseNetwork.effect(cast.player, WaterCurseNetwork.Stage.CHARGE,
-                    cast.special, cast.startedAt, cast.duration, cast.origin, cast.direction));
+                    cast.special, cast.startedAt, cast.duration, cast.position, cast.origin, cast.direction));
     }
 
     public static boolean breakable(BlockState state, ServerLevel level, BlockPos pos) {
@@ -242,15 +242,15 @@ public final class WaterCurseService {
     static final class Beam {
         final ServerPlayer player;
         final ServerLevel level;
-        final Vec3 origin, direction, side, up;
-        final int duration, radius, width, flightTicks;
+        final Vec3 origin, direction;
+        final int duration, radius, flightTicks;
         final double range;
-        int age, cursor;
+        final WaterPurpleBlockScan blockScan;
+        int age;
         Beam(ServerPlayer player, ServerLevel level, Vec3 origin, Vec3 direction, int duration) {
             this.player = player; this.level = level; this.origin = origin; this.direction = direction; this.duration = duration;
-            range = WaterPurpleRules.range(duration); radius = WaterPurpleRules.breakRadius(duration); width = radius * 2 + 1;
-            side = direction.cross(Math.abs(direction.y) > 0.95D ? new Vec3(1, 0, 0) : new Vec3(0, 1, 0)).normalize();
-            up = side.cross(direction).normalize();
+            range = WaterPurpleRules.range(duration); radius = WaterPurpleRules.breakRadius(duration);
+            blockScan = new WaterPurpleBlockScan(origin, direction, range, radius, level.getMinBuildHeight(), level.getMaxBuildHeight() - 1);
             flightTicks = WaterPurpleRules.flightTicks(duration);
         }
         boolean tick(int budget) {
@@ -274,14 +274,17 @@ public final class WaterCurseService {
                 }
             }
             if (!WaterCurseConfig.BREAK_BLOCKS.get() || !player.mayBuild()) return age >= flightTicks;
-            int total = ((int) Math.floor(range) + 1) * width * width;
-            int reached = Math.min(total, ((int) Math.floor(distance) + 1) * width * width);
-            for (int i = 0; i < budget && cursor < reached; i++, cursor++) {
-                int along = cursor / (width * width);
-                int x = (cursor / width) % width - radius;
-                int y = cursor % width - radius;
-                if (x * x + y * y > radius * radius) continue;
-                BlockPos pos = BlockPos.containing(origin.add(direction.scale(along)).add(side.scale(x)).add(up.scale(y)));
+            for (int i = 0; i < budget; i++) {
+                BlockPos pos = blockScan.pollReached(distance);
+                if (pos == null) {
+                    if (!blockScan.hasCandidate(distance)) break;
+                    pos = blockScan.nextCandidate();
+                    if (pos == null) continue;
+                    if (!level.isInWorldBounds(pos) || !level.hasChunkAt(pos)) continue;
+                    double entry = WaterPurpleRules.blockEntryDistance(pos, origin, direction, range, radius);
+                    if (!Double.isFinite(entry)) continue;
+                    if (entry > distance + 1E-9D) { blockScan.defer(pos, entry); continue; }
+                }
                 if (!level.isInWorldBounds(pos) || !level.hasChunkAt(pos)) continue;
                 BlockState state = level.getBlockState(pos);
                 if (!breakable(state, level, pos) || !level.mayInteract(player, pos)
@@ -292,7 +295,7 @@ public final class WaterCurseService {
                     Block.dropResources(state, level, pos, null, player, player.getMainHandItem());
                 level.setBlock(pos, net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), 2);
             }
-            return age >= flightTicks && cursor >= total;
+            return age >= flightTicks && blockScan.finished();
         }
     }
     private WaterCurseService() {}

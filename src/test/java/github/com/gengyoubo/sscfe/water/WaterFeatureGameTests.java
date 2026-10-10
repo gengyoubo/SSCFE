@@ -42,6 +42,29 @@ import java.util.UUID;
 @PrefixGameTestTemplate(false)
 public final class WaterFeatureGameTests {
     @GameTest(template = "empty")
+    public static void purplePacketPreservesCasterAndCoreAnchors(GameTestHelper helper) {
+        Vec3 caster = new Vec3(140, 75, -230);
+        Vec3 direction = new Vec3(1, 0, 0);
+        Vec3 origin = WaterPurpleRules.chargeOrigin(caster.add(0, 1.6D, 0), direction, 24D);
+        var buffer = new net.minecraft.network.FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        try {
+            for (var stage : WaterCurseNetwork.Stage.values()) {
+                var original = new WaterCurseNetwork.Effect(UUID.randomUUID(), helper.getLevel().dimension().location(),
+                        stage, true, 100L, 120L, 600, caster, origin, direction);
+                WaterCurseNetwork.Effect.encode(original, buffer);
+                var decoded = WaterCurseNetwork.Effect.decode(buffer);
+                helper.assertTrue(original.equals(decoded) && decoded.casterPosition().equals(caster)
+                        && decoded.origin().equals(origin) && buffer.readableBytes() == 0,
+                        "Charge, release and cancel packets preserve separate aura and projectile anchors");
+                buffer.clear();
+            }
+        } finally {
+            buffer.release();
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
     public static void purplePenetratesThreeMonsters(GameTestHelper helper) {
         var level = helper.getLevel();
         ServerPlayer player = new net.minecraftforge.common.util.FakePlayer(level,
