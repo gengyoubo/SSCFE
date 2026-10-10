@@ -28,6 +28,9 @@ import net.minecraftforge.event.entity.living.LivingHurtEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.level.BlockEvent;
 import net.minecraftforge.event.server.ServerStoppedEvent;
+import net.minecraftforge.event.server.ServerStoppingEvent;
+import net.minecraftforge.event.level.LevelEvent;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.ModList;
@@ -38,13 +41,16 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.Set;
 
 @Mod.EventBusSubscriber(modid = Sscfe.MOD_ID)
 public final class WaterCurseService {
+    private static final org.slf4j.Logger LOGGER = com.mojang.logging.LogUtils.getLogger();
     private static final Map<UUID, Cast> CASTS = new HashMap<>();
     private static final List<Beam> BEAMS = new ArrayList<>();
     private static final Map<UUID, Long> LAST_CONFIGURE = new HashMap<>();
     private static final int MAX_BEAMS = 8;
+    private static boolean tickingBeams;
 
     public static boolean canUse(Player player) { return player.isCreative() || AxolotlWaterService.isAxolotl(player); }
 
@@ -162,7 +168,7 @@ public final class WaterCurseService {
                 }
                 if (!pay(player, cast.duration)) { insufficient(player); cancel(player); continue; }
                 CASTS.remove(player.getUUID());
-                BEAMS.add(new Beam(player, cast.level, cast.origin, cast.direction, cast.duration));
+                BEAMS.add(new Beam(cast));
                 broadcast(cast, WaterCurseNetwork.Stage.RELEASE);
                 cast.level.playSound(null, player.blockPosition(), ModWaterSounds.RELEASE.get(), SoundSource.PLAYERS, 3F, 0.65F);
                 if (!player.isCreative()) player.getCooldowns().addCooldown(ModWaterContent.WATER_CURSE.get(), 200);
@@ -170,7 +176,13 @@ public final class WaterCurseService {
             } else if (elapsed % 20 == 0) broadcast(cast, WaterCurseNetwork.Stage.CHARGE);
         }
         int budget = Math.max(1, WaterCurseConfig.BLOCK_BUDGET.get() / Math.max(1, BEAMS.size()));
-        BEAMS.removeIf(beam -> beam.tick(budget));
+        tickingBeams = true;
+        try {
+            BEAMS.removeIf(beam -> {
+                try { return beam.tick(budget); }
+                catch (RuntimeException error) { beam.close(); LOGGER.error("Water purple projectile stopped after an error", error); return true; }
+            });
+        } finally { tickingBeams = false; }
     }
 
     @SubscribeEvent(priority = EventPriority.LOWEST)
@@ -208,18 +220,29 @@ public final class WaterCurseService {
     }
 
     @SubscribeEvent public static void death(LivingDeathEvent event) {
-        if (event.getEntity() instanceof Player player) cancel(player);
+        if (event.getEntity() instanceof Player player) { cancel(player); removeBeams(player); }
     }
     @SubscribeEvent public static void logout(PlayerEvent.PlayerLoggedOutEvent event) {
         cancel(event.getEntity()); LAST_CONFIGURE.remove(event.getEntity().getUUID());
-        BEAMS.removeIf(beam -> beam.player == event.getEntity());
+        removeBeams(event.getEntity());
     }
-    @SubscribeEvent public static void dimension(PlayerEvent.PlayerChangedDimensionEvent event) { cancel(event.getEntity()); }
+    private static void removeBeams(Player player) {
+        BEAMS.stream().filter(beam -> beam.player == player).forEach(Beam::close);
+        if (!tickingBeams) BEAMS.removeIf(beam -> beam.closed);
+    }
+    @SubscribeEvent public static void dimension(PlayerEvent.PlayerChangedDimensionEvent event) { cancel(event.getEntity()); removeBeams(event.getEntity()); }
+    @SubscribeEvent public static void stopping(ServerStoppingEvent event) { BEAMS.forEach(Beam::close); BEAMS.clear(); }
+    @SubscribeEvent public static void unload(LevelEvent.Unload event) {
+        BEAMS.stream().filter(beam -> beam.level == event.getLevel()).forEach(Beam::close);
+        if (!tickingBeams) BEAMS.removeIf(beam -> beam.closed);
+    }
     @SubscribeEvent public static void stopped(ServerStoppedEvent event) { CASTS.clear(); BEAMS.clear(); LAST_CONFIGURE.clear(); }
     @SubscribeEvent public static void login(PlayerEvent.PlayerLoggedInEvent event) {
-        if (event.getEntity() instanceof ServerPlayer receiver) for (Cast cast : CASTS.values())
-            WaterCurseNetwork.send(receiver, WaterCurseNetwork.effect(cast.player, WaterCurseNetwork.Stage.CHARGE,
+        if (event.getEntity() instanceof ServerPlayer receiver) {
+            for (Cast cast : CASTS.values()) WaterCurseNetwork.send(receiver, WaterCurseNetwork.effect(cast.player, WaterCurseNetwork.Stage.CHARGE,
                     cast.special, cast.startedAt, cast.duration, cast.position, cast.origin, cast.direction));
+            for (Beam beam : BEAMS) if (beam.cast != null && !beam.visualEnded) WaterCurseNetwork.send(receiver, beam.flight(false));
+        }
     }
 
     public static boolean breakable(BlockState state, ServerLevel level, BlockPos pos) {
@@ -246,18 +269,52 @@ public final class WaterCurseService {
         final int duration, radius, flightTicks;
         final double range;
         final WaterPurpleBlockScan blockScan;
-        int age;
+        final Cast cast;
+        final WaterPurpleChunkLoader chunkLoader;
+        BlockPos blockedTerrain;
+        int age, ticks, waitingTicks;
+        boolean stopped, closed, moving = true, visualEnded;
+        Beam(Cast cast) { this(cast.player, cast.level, cast.origin, cast.direction, cast.duration, cast); }
         Beam(ServerPlayer player, ServerLevel level, Vec3 origin, Vec3 direction, int duration) {
+            this(player, level, origin, direction, duration, null);
+        }
+        private Beam(ServerPlayer player, ServerLevel level, Vec3 origin, Vec3 direction, int duration, Cast cast) {
             this.player = player; this.level = level; this.origin = origin; this.direction = direction; this.duration = duration;
+            this.cast = cast;
+            chunkLoader = cast != null && WaterCurseConfig.CHUNK_LOADING.get() ? new WaterPurpleChunkLoader(level) : null;
             range = WaterPurpleRules.range(duration); radius = WaterPurpleRules.breakRadius(duration);
             blockScan = new WaterPurpleBlockScan(origin, direction, range, radius, level.getMinBuildHeight(), level.getMaxBuildHeight() - 1);
             flightTicks = WaterPurpleRules.flightTicks(duration);
         }
         boolean tick(int budget) {
-            if (player.isRemoved() || player.level() != level) return true;
+            if (closed) return true;
+            if (!player.isAlive() || player.isRemoved() || player.level() != level) { close(); return true; }
+            ticks++;
+            boolean breaking = WaterCurseConfig.BREAK_BLOCKS.get() && player.mayBuild();
             double previousDistance = WaterPurpleRules.travelDistance(duration, age);
-            double distance = WaterPurpleRules.travelDistance(duration, ++age);
-            if (age <= flightTicks) {
+            double nextDistance = WaterPurpleRules.travelDistance(duration, age + 1);
+            boolean advance = !stopped && age < flightTicks;
+            if (chunkLoader != null) {
+                Vec3 head = origin.add(direction.scale(previousDistance));
+                double windowRadius = Math.max(WaterPurpleRules.damageRadius(duration), radius + WaterCurseConfig.SIDE_MARGIN_CHUNKS.get() * 16D);
+                Vec3 rear = origin.add(direction.scale(Math.max(0D, previousDistance - WaterCurseConfig.REAR_CHUNKS.get() * 16D)));
+                Vec3 front = origin.add(direction.scale(Math.min(range, previousDistance + WaterCurseConfig.PRELOAD_CHUNKS.get() * 16D)));
+                Set<ChunkPos> window = chunks(rear, front, windowRadius);
+                chunkLoader.trim(window, blockScan, breaking, blockedTerrain == null ? null : new ChunkPos(blockedTerrain));
+                if (advance) {
+                    var state = chunkLoader.ensure(chunks(head, origin.add(direction.scale(nextDistance)), WaterPurpleRules.damageRadius(duration)));
+                    if (state == WaterPurpleChunkLoader.State.MISSING) { stopFlight("chunk_missing"); advance = false; }
+                    else if (state == WaterPurpleChunkLoader.State.FAILED) { fail("chunk_load_failed"); return true; }
+                    else advance = state == WaterPurpleChunkLoader.State.READY;
+                }
+                if (advance) chunkLoader.prefetch(window);
+            }
+            if (advance) age++;
+            double distance = WaterPurpleRules.travelDistance(duration, age);
+            boolean progressed = advance;
+            boolean wasMoving = moving;
+            moving = advance && age < flightTicks;
+            if (advance) {
                 double hitRadius = WaterPurpleRules.damageRadius(duration);
                 Vec3 previousCore = origin.add(direction.scale(previousDistance));
                 Vec3 core = origin.add(direction.scale(distance));
@@ -273,18 +330,26 @@ public final class WaterCurseService {
                     target.invulnerableTime = invulnerable;
                 }
             }
-            if (!WaterCurseConfig.BREAK_BLOCKS.get() || !player.mayBuild()) return age >= flightTicks;
-            for (int i = 0; i < budget; i++) {
-                BlockPos pos = blockScan.pollReached(distance);
+            for (int i = 0; breaking && i < budget; i++) {
+                BlockPos pos = blockedTerrain != null ? blockedTerrain : blockScan.pollReached(distance);
+                blockedTerrain = null;
                 if (pos == null) {
                     if (!blockScan.hasCandidate(distance)) break;
                     pos = blockScan.nextCandidate();
                     if (pos == null) continue;
-                    if (!level.isInWorldBounds(pos) || !level.hasChunkAt(pos)) continue;
+                    progressed = true;
+                    if (!level.isInWorldBounds(pos) || (chunkLoader == null && !level.hasChunkAt(pos))) continue;
                     double entry = WaterPurpleRules.blockEntryDistance(pos, origin, direction, range, radius);
                     if (!Double.isFinite(entry)) continue;
-                    if (entry > distance + 1E-9D) { blockScan.defer(pos, entry); continue; }
+                    if (entry > distance + 1E-9D) { if (!stopped) blockScan.defer(pos, entry); continue; }
                 }
+                if (chunkLoader != null) {
+                    var state = chunkLoader.ensure(Set.of(new ChunkPos(pos)));
+                    if (state == WaterPurpleChunkLoader.State.WAIT) { blockedTerrain = pos; break; }
+                    if (state == WaterPurpleChunkLoader.State.FAILED) { fail("chunk_load_failed"); return true; }
+                    if (state == WaterPurpleChunkLoader.State.MISSING) { if (!stopped) stopFlight("chunk_missing"); continue; }
+                }
+                progressed = true;
                 if (!level.isInWorldBounds(pos) || !level.hasChunkAt(pos)) continue;
                 BlockState state = level.getBlockState(pos);
                 if (!breakable(state, level, pos) || !level.mayInteract(player, pos)
@@ -295,7 +360,36 @@ public final class WaterCurseService {
                     Block.dropResources(state, level, pos, null, player, player.getMainHandItem());
                 level.setBlock(pos, net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), 2);
             }
-            return age >= flightTicks && blockScan.finished();
+            if (chunkLoader != null && !progressed && ++waitingTicks > WaterCurseConfig.CHUNK_WAIT_TICKS.get()) { fail("chunk_wait_timeout"); return true; }
+            if (progressed) waitingTicks = 0;
+            if (cast != null && !visualEnded && (wasMoving != moving || ticks % 5 == 0 || age >= flightTicks || stopped)) {
+                boolean ended = age >= flightTicks || stopped;
+                WaterCurseNetwork.broadcast(flight(ended)); visualEnded = ended;
+            }
+            if ((age >= flightTicks || stopped) && (!breaking || (blockedTerrain == null && blockScan.finished()))) { close(); return true; }
+            return false;
+        }
+        private Set<ChunkPos> chunks(Vec3 start, Vec3 end, double radius) {
+            if (Math.min(start.y, end.y) - radius >= level.getMaxBuildHeight()
+                    || Math.max(start.y, end.y) + radius < level.getMinBuildHeight()) return Set.of();
+            return WaterPurpleChunkLoader.footprint(start, end, radius);
+        }
+        private WaterCurseNetwork.Flight flight(boolean ended) {
+            var effect = new WaterCurseNetwork.Effect(player.getUUID(), level.dimension().location(), WaterCurseNetwork.Stage.RELEASE,
+                    cast.special, cast.startedAt, level.getGameTime(), duration, cast.position, origin, direction);
+            return new WaterCurseNetwork.Flight(effect, WaterPurpleRules.travelDistance(duration, age), moving, ended);
+        }
+        private void stopFlight(String reason) {
+            stopped = true;
+            blockScan.stopAt(WaterPurpleRules.travelDistance(duration, age));
+            player.displayClientMessage(Component.translatable("message.sscfe.water_curse." + reason), true);
+        }
+        private void fail(String reason) { stopFlight(reason); close(); }
+        void close() {
+            if (closed) return;
+            closed = true;
+            if (chunkLoader != null) chunkLoader.close();
+            if (cast != null && !visualEnded) { WaterCurseNetwork.broadcast(flight(true)); visualEnded = true; }
         }
     }
     private WaterCurseService() {}

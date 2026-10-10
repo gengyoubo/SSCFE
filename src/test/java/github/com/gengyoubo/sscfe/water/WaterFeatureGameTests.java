@@ -57,6 +57,13 @@ public final class WaterFeatureGameTests {
                         && decoded.origin().equals(origin) && buffer.readableBytes() == 0,
                         "Charge, release and cancel packets preserve separate aura and projectile anchors");
                 buffer.clear();
+                for (var flight : new WaterCurseNetwork.Flight[]{new WaterCurseNetwork.Flight(original, 0D, false, false),
+                        new WaterCurseNetwork.Flight(original, 125D, true, false), new WaterCurseNetwork.Flight(original, 3000D, false, true)}) {
+                    WaterCurseNetwork.Flight.encode(flight, buffer);
+                    helper.assertTrue(flight.equals(WaterCurseNetwork.Flight.decode(buffer)) && buffer.readableBytes() == 0,
+                            "Moving, waiting and finished flight snapshots preserve authoritative progress");
+                    buffer.clear();
+                }
             }
         } finally {
             buffer.release();

@@ -2,6 +2,7 @@ package github.com.gengyoubo.sscfe.water;
 
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.phys.AABB;
 
 import java.util.Arrays;
 
@@ -34,7 +35,12 @@ public final class WaterPurpleRules {
 
     /** First distance where a moving sphere touches the block's full unit cube; infinity means no intersection. */
     static double blockEntryDistance(BlockPos block, Vec3 origin, Vec3 direction, double range, double radius) {
-        double[] starts = {origin.x - block.getX(), origin.y - block.getY(), origin.z - block.getZ()};
+        return boxEntryDistance(new AABB(block), origin, direction, range, radius);
+    }
+
+    static double boxEntryDistance(AABB box, Vec3 origin, Vec3 direction, double range, double radius) {
+        double[] starts = {origin.x - box.minX, origin.y - box.minY, origin.z - box.minZ};
+        double[] sizes = {box.maxX - box.minX, box.maxY - box.minY, box.maxZ - box.minZ};
         double[] velocities = {direction.x, direction.y, direction.z};
         double[] cuts = new double[8];
         cuts[0] = 0D; cuts[1] = range;
@@ -43,7 +49,7 @@ public final class WaterPurpleRules {
         for (int axis = 0; axis < 3; axis++) {
             if (Math.abs(velocities[axis]) < 1E-12D) continue;
             for (int face = 0; face <= 1; face++) {
-                double t = (face - starts[axis]) / velocities[axis];
+                double t = (face * sizes[axis] - starts[axis]) / velocities[axis];
                 if (t > 0D && t < range) cuts[count++] = t;
             }
         }
@@ -54,8 +60,8 @@ public final class WaterPurpleRules {
             double a = 0D, b = 0D, c = -radius * radius;
             for (int axis = 0; axis < 3; axis++) {
                 double coordinate = starts[axis] + velocities[axis] * middle;
-                if (coordinate >= 0D && coordinate <= 1D) continue;
-                double delta = starts[axis] + velocities[axis] * low - (coordinate < 0D ? 0D : 1D);
+                if (coordinate >= 0D && coordinate <= sizes[axis]) continue;
+                double delta = starts[axis] + velocities[axis] * low - (coordinate < 0D ? 0D : sizes[axis]);
                 a += velocities[axis] * velocities[axis];
                 b += delta * velocities[axis];
                 c += delta * delta;

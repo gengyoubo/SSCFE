@@ -20,7 +20,7 @@ import java.util.function.Supplier;
 
 public final class WaterCurseNetwork {
     private static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
-            ResourceLocation.fromNamespaceAndPath(Sscfe.MOD_ID, "water_curse"), () -> "3", "3"::equals, "3"::equals);
+            ResourceLocation.fromNamespaceAndPath(Sscfe.MOD_ID, "water_curse"), () -> "4", "4"::equals, "4"::equals);
     public enum Action { START, RELEASE, CANCEL, CONFIGURE }
     public enum Stage { CHARGE, RELEASE, CANCEL }
 
@@ -28,6 +28,8 @@ public final class WaterCurseNetwork {
         CHANNEL.registerMessage(0, Input.class, Input::encode, Input::decode, Input::handle,
                 Optional.of(NetworkDirection.PLAY_TO_SERVER));
         CHANNEL.registerMessage(1, Effect.class, Effect::encode, Effect::decode, Effect::handle,
+                Optional.of(NetworkDirection.PLAY_TO_CLIENT));
+        CHANNEL.registerMessage(2, Flight.class, Flight::encode, Flight::decode, Flight::handle,
                 Optional.of(NetworkDirection.PLAY_TO_CLIENT));
     }
 
@@ -45,6 +47,20 @@ public final class WaterCurseNetwork {
 
     public static void send(ServerPlayer receiver, Effect effect) {
         CHANNEL.send(PacketDistributor.PLAYER.with(() -> receiver), effect);
+    }
+    public static void broadcast(Flight flight) { CHANNEL.send(PacketDistributor.ALL.noArg(), flight); }
+    public static void send(ServerPlayer receiver, Flight flight) { CHANNEL.send(PacketDistributor.PLAYER.with(() -> receiver), flight); }
+
+    public record Flight(Effect effect, double distance, boolean moving, boolean finished) {
+        static void encode(Flight value, FriendlyByteBuf buf) {
+            Effect.encode(value.effect, buf); buf.writeDouble(value.distance); buf.writeBoolean(value.moving); buf.writeBoolean(value.finished);
+        }
+        static Flight decode(FriendlyByteBuf buf) { return new Flight(Effect.decode(buf), buf.readDouble(), buf.readBoolean(), buf.readBoolean()); }
+        static void handle(Flight value, Supplier<NetworkEvent.Context> supplier) {
+            var context = supplier.get();
+            context.enqueueWork(() -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> WaterPurpleEffects.acceptFlight(value)));
+            context.setPacketHandled(true);
+        }
     }
 
     public record Input(Action action, int duration) {

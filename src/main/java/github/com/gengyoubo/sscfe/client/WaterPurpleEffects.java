@@ -97,6 +97,26 @@ public final class WaterPurpleEffects {
                 && clientTicks - p.receivedAt <= 60 && mc.player.isAlive();
     }
 
+    public static void acceptFlight(WaterCurseNetwork.Flight flight) {
+        var packet = flight.effect();
+        CastKey key = new CastKey(packet.caster(), packet.dimension(), packet.startedAt());
+        Presentation p = ACTIVE.get(key);
+        if (p != null && p.serverControlled && packet.serverNow() < p.flightServerNow) return;
+        if (flight.finished()) {
+            if (p != null) { p.stop(); ACTIVE.remove(key); }
+            return;
+        }
+        if (p == null || p.packet.stage() != WaterCurseNetwork.Stage.RELEASE) {
+            accept(packet);
+            p = ACTIVE.get(key);
+        }
+        if (p != null) {
+            p.serverControlled = true;
+            p.flightDistance = flight.distance(); p.flightMoving = flight.moving();
+            p.flightReceivedAt = clientTicks; p.flightServerNow = packet.serverNow();
+        }
+    }
+
     /** Animation time is tied to the server's casting timeline. */
     public static WaterPurpleAnimationTimeline.Sample animation(UUID player, float partialTick) {
         var mc = Minecraft.getInstance();
@@ -132,7 +152,8 @@ public final class WaterPurpleEffects {
             long since = clientTicks - p.receivedAt;
             if ((p.packet.stage() == WaterCurseNetwork.Stage.CHARGE && since > 60)
                     || (p.packet.stage() == WaterCurseNetwork.Stage.RELEASE
-                    && since >= WaterPurpleRules.flightTicks(p.packet.duration()))) { p.stop(); return true; }
+                    && (p.serverControlled ? clientTicks - p.flightReceivedAt > 200
+                    : since >= WaterPurpleRules.flightTicks(p.packet.duration())))) { p.stop(); return true; }
             p.music();
             if (p.packet.stage() == WaterCurseNetwork.Stage.CHARGE
                     && localCasting() && p.packet.caster().equals(mc.player.getUUID())) lockView(p);
@@ -247,6 +268,9 @@ public final class WaterPurpleEffects {
         final Vec3 side, up;
         final Vec3 lockedPosition;
         boolean musicEligible, musicAttempted;
+        boolean serverControlled, flightMoving;
+        double flightDistance;
+        long flightReceivedAt, flightServerNow;
         WaterPurpleMusicSound music;
         Presentation(WaterCurseNetwork.Effect packet) {
             this.packet = packet;
@@ -259,9 +283,14 @@ public final class WaterPurpleEffects {
             return packet.stage() == WaterCurseNetwork.Stage.CHARGE
                     ? packet.serverNow() - packet.startedAt() + clientTicks - receivedAt : clientTicks - receivedAt;
         }
+        double flightElapsed() {
+            return serverControlled ? flightDistance / WaterPurpleRules.SPEED_BLOCKS_PER_TICK
+                    + (flightMoving ? Math.min(5L, clientTicks - flightReceivedAt) : 0D) : elapsed();
+        }
         Vec3 core(double elapsed) {
             if (packet.stage() == WaterCurseNetwork.Stage.CHARGE) return packet.origin();
-            return packet.origin().add(packet.direction().scale(WaterPurpleRules.travelDistance(packet.duration(), elapsed)));
+            double flight = serverControlled ? flightElapsed() + (flightMoving ? elapsed - Math.floor(elapsed) : 0D) : elapsed;
+            return packet.origin().add(packet.direction().scale(WaterPurpleRules.travelDistance(packet.duration(), flight)));
         }
         long auraSeed() { return packet.caster().getLeastSignificantBits() ^ packet.startedAt(); }
         void music() {

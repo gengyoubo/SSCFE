@@ -2,6 +2,8 @@ package github.com.gengyoubo.sscfe.water;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.level.ChunkPos;
+import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 
 import java.util.Comparator;
 import java.util.PriorityQueue;
@@ -10,9 +12,11 @@ import java.util.PriorityQueue;
 final class WaterPurpleBlockScan {
     private record Pending(BlockPos position, double entryDistance) {}
     private final PriorityQueue<Pending> pending = new PriorityQueue<>(Comparator.comparingDouble(Pending::entryDistance));
+    private final Long2IntOpenHashMap pendingChunks = new Long2IntOpenHashMap();
     private final Vec3 origin, direction;
     private final double range, radius, axisOrigin, axisDirection;
-    private final int axis, step, lastSlice, minY, maxY;
+    private final int axis, step, minY, maxY;
+    private int lastSlice;
     private int nextSlice;
     private Slice current;
 
@@ -49,9 +53,33 @@ final class WaterPurpleBlockScan {
         return position;
     }
 
-    void defer(BlockPos position, double entryDistance) { pending.add(new Pending(position, entryDistance)); }
+    void defer(BlockPos position, double entryDistance) {
+        pending.add(new Pending(position, entryDistance));
+        pendingChunks.addTo(new ChunkPos(position).toLong(), 1);
+    }
     BlockPos pollReached(double distance) {
-        return !pending.isEmpty() && pending.peek().entryDistance <= distance + 1E-9D ? pending.remove().position : null;
+        if (pending.isEmpty() || pending.peek().entryDistance > distance + 1E-9D) return null;
+        BlockPos pos = pending.remove().position;
+        long chunk = new ChunkPos(pos).toLong();
+        if (pendingChunks.addTo(chunk, -1) == 1) pendingChunks.remove(chunk);
+        return pos;
+    }
+    boolean needsChunk(ChunkPos chunk) {
+        if (pendingChunks.containsKey(chunk.toLong())) return true;
+        if (finished()) return false;
+        if (axis == 1) return true;
+        int slab = current == null ? nextSlice : nextSlice - step;
+        int min = (axis == 0 ? chunk.x : chunk.z) * 16;
+        return step > 0 ? min + 15 >= slab : min <= slab;
+    }
+    void stopAt(double distance) {
+        lastSlice = floor(axisOrigin + axisDirection * distance + step * radius - (step < 0 ? 1E-7D : 0D));
+        pending.removeIf(item -> {
+            if (item.entryDistance <= distance + 1E-9D) return false;
+            long chunk = new ChunkPos(item.position).toLong();
+            if (pendingChunks.addTo(chunk, -1) == 1) pendingChunks.remove(chunk);
+            return true;
+        });
     }
     boolean finished() {
         boolean exhausted = (step > 0 ? nextSlice > lastSlice : nextSlice < lastSlice)
