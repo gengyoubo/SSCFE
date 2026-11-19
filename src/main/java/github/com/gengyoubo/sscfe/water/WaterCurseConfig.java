@@ -35,6 +35,14 @@ public final class WaterCurseConfig {
     public static final ForgeConfigSpec.IntValue CHUNK_WAIT_TICKS = BUILDER
             .comment("Cancel a projectile after this many consecutive waiting ticks, releasing all its tickets.")
             .defineInRange("water_purple.chunk_loading.max_wait_ticks", 1200, 100, 12000);
+    public static final ForgeConfigSpec.BooleanValue COOL_LAVA = BUILDER.define("water_purple.cool_lava", true);
+    public static final ForgeConfigSpec.BooleanValue TERMINAL_EXPLOSION = BUILDER.define("water_purple.terminal_explosion.enabled", true);
+    public static final ForgeConfigSpec.DoubleValue TERMINAL_BREAK_RADIUS = BUILDER.defineInRange("water_purple.terminal_explosion.break_radius", 24D, 1D, 64D);
+    public static final ForgeConfigSpec.DoubleValue TERMINAL_DAMAGE_RADIUS = BUILDER.defineInRange("water_purple.terminal_explosion.damage_radius", 40D, 1D, 96D);
+    public static final ForgeConfigSpec.DoubleValue TERMINAL_VISUAL_RADIUS = BUILDER.defineInRange("water_purple.terminal_explosion.visual_radius", 64D, 1D, 160D);
+    public static final ForgeConfigSpec.DoubleValue TERMINAL_DAMAGE = BUILDER
+            .comment("One-time terminal damage at full power. Radii and damage scale with casting power.")
+            .defineInRange("water_purple.terminal_explosion.damage", 500D, 0D, 10000D);
     public static final ForgeConfigSpec SPEC = BUILDER.build();
     private WaterCurseConfig() {}
 }

@@ -1,4 +1,7 @@
 {
+  "key.sscfe.form_interaction": "多人互动（按住并右键玩家）",
+  "message.sscfe.axolotl_stack.joined": "已加入美西螈叠罗汉，按潜行键退出",
+  "message.sscfe.axolotl_stack.carrier": "美西螈叠罗汉：按潜行键可让背上的玩家下来",
   "gamerule.sscKeepFormAfterDeath": "死亡后保持当前形态",
   "gamerule.sscKeepFormAfterDeath.description": "开启后，玩家死亡重生时保留死亡前的形态；默认开启",
   "screen.sscfe.form_powers.active": "主动技能（需要快捷键）",

@@ -1,4 +1,7 @@
 {
+  "key.sscfe.form_interaction": "Multiplayer Interaction (hold and right-click a player)",
+  "message.sscfe.axolotl_stack.joined": "Joined the axolotl stack. Press Sneak to leave",
+  "message.sscfe.axolotl_stack.carrier": "Axolotl stack: press Sneak to let the player on your back down",
   "gamerule.sscKeepFormAfterDeath": "Keep current form after death",
   "gamerule.sscKeepFormAfterDeath.description": "When enabled, players retain their current form after respawning. Enabled by default",
   "key.sscfe.form_powers": "View Form Abilities",

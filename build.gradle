@@ -43,6 +43,18 @@ minecraft {
                 }
             }
         }
+        // Dev-only visual check: opens a flat world, stacks fake axolotl players, saves
+        // screenshots to run/screenshots/sscfe-stack-*.png and exits.
+        stackShowcase {
+            parent runs.client
+            property 'sscfe.stackShowcase', 'true'
+            args '--width', '1280', '--height', '720'
+            mods {
+                "${mod_id}" {
+                    source sourceSets.test
+                }
+            }
+        }
         data {
             workingDirectory project.file('run-data')
             args '--mod', mod_id, '--all', '--output', file('src/generated/resources/'), '--existing', file('src/main/resources/')
@@ -87,7 +99,7 @@ repositories {
 dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
 
-    implementation fg.deobf("curse.maven:shape-shifter-curse-forge-1683902:9104450")
+    implementation fg.deobf("net.onixary:shape_shifter_curse:${shape_shifter_curse_version}")
     implementation fg.deobf("curse.maven:jei-238222:9058038")
     implementation fg.deobf("top.theillusivec4.curios:curios-forge:5.9.1+1.20.1")
     implementation fg.deobf("software.bernie.geckolib:geckolib-forge-${project.minecraft_version}:${project.geckolib_version}")
@@ -135,6 +147,9 @@ tasks.configureEach {
     }
     if (name == 'runClient') {
         dependsOn 'classes', 'processResources', 'stageDevModDependencies'
+    }
+    if (name == 'runStackShowcase') {
+        dependsOn 'classes', 'testClasses', 'processResources', 'stageDevModDependencies'
     }
 }
 

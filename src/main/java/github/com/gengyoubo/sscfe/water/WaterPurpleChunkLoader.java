@@ -69,6 +69,12 @@ final class WaterPurpleChunkLoader implements AutoCloseable {
         if (closed) return State.FAILED;
         for (ChunkPos pos : required) {
             Entry existing = entries.get(pos);
+            // Another player or task may have generated a prefetched missing chunk in the meantime.
+            // A cached disk result must not override terrain that is now fully loaded.
+            if (existing != null && existing.state == State.MISSING && level.getChunkSource().getChunkNow(pos.x, pos.z) != null) {
+                entries.remove(pos);
+                continue;
+            }
             if (existing != null && (existing.state == State.MISSING || existing.state == State.FAILED)) return existing.state;
         }
         int localNew = 0, globalNew = 0;

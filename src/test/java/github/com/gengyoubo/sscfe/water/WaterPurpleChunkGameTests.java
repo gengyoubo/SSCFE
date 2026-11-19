@@ -93,8 +93,9 @@ public final class WaterPurpleChunkGameTests {
         helper.runAfterDelay(1, new Poll());
     }
 
-    @GameTest(template = "empty", timeoutTicks = 2000)
+    @GameTest(template = "empty", timeoutTicks = 10000)
     public static void savedFullChunkLoadsAsynchronously(GameTestHelper helper) {
+        // GameTest ticks run without the normal 50 ms delay; allow real background I/O enough time.
         var level = helper.getLevel();
         ChunkPos saved = new ChunkPos(100000 + (UUID.randomUUID().hashCode() & 4095), 100000);
         LevelChunk fixture = new LevelChunk(level, saved);
@@ -108,8 +109,11 @@ public final class WaterPurpleChunkGameTests {
             public void run() {
                 try {
                     var state = loader.ensure(Set.of(saved));
-                    if (state == WaterPurpleChunkLoader.State.WAIT && attempts++ < 1900) { helper.runAfterDelay(1, () -> run()); return; }
-                    helper.assertTrue(state == WaterPurpleChunkLoader.State.READY, "An existing full chunk and its entities become ready without a blocking getChunk");
+                    if (state == WaterPurpleChunkLoader.State.WAIT && attempts++ < 9500) { helper.runAfterDelay(1, () -> run()); return; }
+                    helper.assertTrue(state == WaterPurpleChunkLoader.State.READY, "An existing full chunk and its entities become ready without a blocking getChunk: "
+                            + state + ", held=" + loader.heldChunks() + ", total=" + WaterPurpleChunkLoader.totalHeldChunks()
+                            + ", loaded=" + (level.getChunkSource().getChunkNow(saved.x, saved.z) != null)
+                            + ", status=" + level.getChunkSource().getChunkDebugData(saved));
                     helper.assertTrue(level.getChunkSource().getChunkNow(saved.x, saved.z).getBlockState(stone).is(Blocks.STONE),
                             "Loaded terrain preserves saved stone");
                     loader.close(); helper.assertTrue(loader.heldChunks() == 0, "Completion releases the async chunk's ticket"); helper.succeed();
@@ -119,7 +123,7 @@ public final class WaterPurpleChunkGameTests {
         helper.runAfterDelay(1, new Poll());
     }
 
-    @GameTest(template = "empty", timeoutTicks = 2000)
+    @GameTest(template = "empty", timeoutTicks = 10000)
     public static void ungeneratedChunkBecomesFullAndReleasesTickets(GameTestHelper helper) {
         var level = helper.getLevel();
         ChunkPos fresh = new ChunkPos(300000 + (UUID.randomUUID().hashCode() & 4095), 300000);
@@ -132,7 +136,7 @@ public final class WaterPurpleChunkGameTests {
                 try {
                     if (!confirmedAbsent) {
                         if (!probe.isDone()) {
-                            helper.assertTrue(attempts++ < 1900, "The fresh chunk probe finishes asynchronously");
+                            helper.assertTrue(attempts++ < 9500, "The fresh chunk probe finishes asynchronously");
                             helper.runAfterDelay(1, () -> run()); return;
                         }
                         helper.assertTrue(probe.getNow(java.util.Optional.empty()).isEmpty()
@@ -141,11 +145,14 @@ public final class WaterPurpleChunkGameTests {
                         confirmedAbsent = true;
                     }
                     var state = loader.ensure(Set.of(fresh));
-                    if (state == WaterPurpleChunkLoader.State.WAIT && attempts++ < 1900) {
+                    if (state == WaterPurpleChunkLoader.State.WAIT && attempts++ < 9500) {
                         helper.runAfterDelay(1, () -> run()); return;
                     }
                     helper.assertTrue(state == WaterPurpleChunkLoader.State.READY,
-                            "An ungenerated chunk reaches FULL and entity readiness through async region tickets");
+                            "An ungenerated chunk reaches FULL and entity readiness through async region tickets: " + state
+                                    + ", held=" + loader.heldChunks() + ", total=" + WaterPurpleChunkLoader.totalHeldChunks()
+                                    + ", loaded=" + (level.getChunkSource().getChunkNow(fresh.x, fresh.z) != null)
+                                    + ", status=" + level.getChunkSource().getChunkDebugData(fresh));
                     var generated = level.getChunkSource().getChunkNow(fresh.x, fresh.z);
                     helper.assertTrue(generated != null && generated.getStatus() == net.minecraft.world.level.chunk.ChunkStatus.FULL,
                             "Terrain generation completes before the projectile is allowed to advance");
@@ -174,6 +181,16 @@ public final class WaterPurpleChunkGameTests {
             WaterCurseService.Beam beam = findBeam(player);
             helper.assertTrue(beam != null && beam.chunkLoader != null && beam.chunkLoader.heldChunks() > 0,
                     "A real released beam owns a temporary loading window");
+            // A prefetch window can contain absent chunks when generation is disabled. Reserve five
+            // explicitly loaded fixtures rather than assuming all prefetched positions have tickets.
+            var occupied = new java.util.HashSet<ChunkPos>();
+            for (int[] offset : new int[][]{{0, 0}, {1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
+                var fixture = new ChunkPos(chunk.x + offset[0], chunk.z + offset[1]);
+                helper.getLevel().getChunk(fixture.x, fixture.z);
+                occupied.add(fixture);
+            }
+            beam.chunkLoader.ensure(occupied);
+            helper.assertTrue(beam.chunkLoader.heldChunks() > 4, "The pause fixture exceeds the temporary per-beam cap");
             int before = beam.age, oldLimit = WaterCurseConfig.MAX_CHUNKS_PER_BEAM.get();
             WaterCurseConfig.MAX_CHUNKS_PER_BEAM.set(4);
             helper.runAfterDelay(2, () -> {

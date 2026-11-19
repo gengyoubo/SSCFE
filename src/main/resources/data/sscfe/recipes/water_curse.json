@@ -1,4 +1,7 @@
 {
+  "conditions": [
+    { "type": "forge:item_exists", "item": "sscfe:water_curse" }
+  ],
   "type": "minecraft:crafting_shaped",
   "category": "misc",
   "pattern": ["XYX", "YZY", "XYX"],

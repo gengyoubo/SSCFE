@@ -5,6 +5,7 @@ import github.com.gengyoubo.sscfe.init.ModForms;
 import github.com.gengyoubo.sscfe.init.ModMoonContent;
 import github.com.gengyoubo.sscfe.init.ModWaterContent;
 import github.com.gengyoubo.sscfe.init.ModWaterSounds;
+import github.com.gengyoubo.sscfe.interaction.FormInteractionNetwork;
 import github.com.gengyoubo.sscfe.water.WaterCurseConfig;
 import github.com.gengyoubo.sscfe.water.WaterCurseNetwork;
 import net.minecraftforge.fml.ModLoadingContext;
@@ -22,6 +23,7 @@ public final class Sscfe {
         ModWaterContent.register(FMLJavaModLoadingContext.get().getModEventBus());
         ModWaterSounds.register(FMLJavaModLoadingContext.get().getModEventBus());
         WaterCurseNetwork.initialize();
+        FormInteractionNetwork.initialize();
         ModMoonContent.register(FMLJavaModLoadingContext.get().getModEventBus());
         registerForms();
         ModLoadingContext.get().registerConfig(ModConfig.Type.CLIENT, SscfeClientConfig.SPEC, "sscfe-client.toml");

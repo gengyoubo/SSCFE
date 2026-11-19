@@ -20,7 +20,7 @@ import java.util.function.Supplier;
 
 public final class WaterCurseNetwork {
     private static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
-            ResourceLocation.fromNamespaceAndPath(Sscfe.MOD_ID, "water_curse"), () -> "4", "4"::equals, "4"::equals);
+            ResourceLocation.fromNamespaceAndPath(Sscfe.MOD_ID, "water_curse"), () -> "5", "5"::equals, "5"::equals);
     public enum Action { START, RELEASE, CANCEL, CONFIGURE }
     public enum Stage { CHARGE, RELEASE, CANCEL }
 
@@ -30,6 +30,8 @@ public final class WaterCurseNetwork {
         CHANNEL.registerMessage(1, Effect.class, Effect::encode, Effect::decode, Effect::handle,
                 Optional.of(NetworkDirection.PLAY_TO_CLIENT));
         CHANNEL.registerMessage(2, Flight.class, Flight::encode, Flight::decode, Flight::handle,
+                Optional.of(NetworkDirection.PLAY_TO_CLIENT));
+        CHANNEL.registerMessage(3, Burst.class, Burst::encode, Burst::decode, Burst::handle,
                 Optional.of(NetworkDirection.PLAY_TO_CLIENT));
     }
 
@@ -50,6 +52,25 @@ public final class WaterCurseNetwork {
     }
     public static void broadcast(Flight flight) { CHANNEL.send(PacketDistributor.ALL.noArg(), flight); }
     public static void send(ServerPlayer receiver, Flight flight) { CHANNEL.send(PacketDistributor.PLAYER.with(() -> receiver), flight); }
+    public static void broadcast(Burst burst) { CHANNEL.send(PacketDistributor.ALL.noArg(), burst); }
+    public static void send(ServerPlayer receiver, Burst burst) { CHANNEL.send(PacketDistributor.PLAYER.with(() -> receiver), burst); }
+
+    public record Burst(UUID id, ResourceLocation dimension, Vec3 center, double visualRadius,
+                        int age, double workProgress, boolean finished) {
+        static void encode(Burst value, FriendlyByteBuf buf) {
+            buf.writeUUID(value.id); buf.writeResourceLocation(value.dimension); Effect.writeVec(buf, value.center);
+            buf.writeDouble(value.visualRadius); buf.writeVarInt(value.age); buf.writeDouble(value.workProgress); buf.writeBoolean(value.finished);
+        }
+        static Burst decode(FriendlyByteBuf buf) {
+            return new Burst(buf.readUUID(), buf.readResourceLocation(), Effect.readVec(buf), buf.readDouble(),
+                    buf.readVarInt(), buf.readDouble(), buf.readBoolean());
+        }
+        static void handle(Burst value, Supplier<NetworkEvent.Context> supplier) {
+            var context = supplier.get();
+            context.enqueueWork(() -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> WaterPurpleEffects.acceptBurst(value)));
+            context.setPacketHandled(true);
+        }
+    }
 
     public record Flight(Effect effect, double distance, boolean moving, boolean finished) {
         static void encode(Flight value, FriendlyByteBuf buf) {

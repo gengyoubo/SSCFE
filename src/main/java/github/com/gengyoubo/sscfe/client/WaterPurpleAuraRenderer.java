@@ -136,7 +136,7 @@ final class WaterPurpleAuraRenderer extends RenderType {
                 + 2D * Math.sin(time * 0.014D + cloud * 0.75D), Math.sin(angle) * radius);
     }
 
-    private static void puff(VertexConsumer out, Matrix4f matrix, Vec3 center, Vec3 right, Vec3 up,
+    static void puff(VertexConsumer out, Matrix4f matrix, Vec3 center, Vec3 right, Vec3 up,
                              double width, double height, int red, int green, int blue, int alpha) {
         for (int lobe = 0; lobe < 3; lobe++) {
             Vec3 lobeCenter = center.add(right.scale((lobe - 1) * width * 0.45D)).add(up.scale(lobe == 1 ? height * 0.25D : 0D));

@@ -20,13 +20,11 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.living.LivingDamageEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.entity.living.LivingHurtEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
-import net.minecraftforge.event.level.BlockEvent;
 import net.minecraftforge.event.server.ServerStoppedEvent;
 import net.minecraftforge.event.server.ServerStoppingEvent;
 import net.minecraftforge.event.level.LevelEvent;
@@ -55,6 +53,7 @@ public final class WaterCurseService {
     public static boolean canUse(Player player) { return player.isCreative() || AxolotlWaterService.isAxolotl(player); }
 
     public static ItemStack accessory(Player player) {
+        if (!ModWaterContent.WATER_CURSE.isPresent()) return ItemStack.EMPTY;
         if (!canUse(player)) return ItemStack.EMPTY;
         // Creative testing also works with a held accessory, without a Curios slot.
         if (player.isCreative()) {
@@ -241,7 +240,11 @@ public final class WaterCurseService {
         if (event.getEntity() instanceof ServerPlayer receiver) {
             for (Cast cast : CASTS.values()) WaterCurseNetwork.send(receiver, WaterCurseNetwork.effect(cast.player, WaterCurseNetwork.Stage.CHARGE,
                     cast.special, cast.startedAt, cast.duration, cast.position, cast.origin, cast.direction));
-            for (Beam beam : BEAMS) if (beam.cast != null && !beam.visualEnded) WaterCurseNetwork.send(receiver, beam.flight(false));
+            for (Beam beam : BEAMS) {
+                if (beam.cast != null && !beam.visualEnded) WaterCurseNetwork.send(receiver, beam.flight(false));
+                if (beam.terminalExplosion != null && beam.terminalExplosion.started && !beam.terminalExplosion.finished)
+                    WaterCurseNetwork.send(receiver, beam.terminalExplosion.snapshot(false));
+            }
         }
     }
 
@@ -271,6 +274,9 @@ public final class WaterCurseService {
         final WaterPurpleBlockScan blockScan;
         final Cast cast;
         final WaterPurpleChunkLoader chunkLoader;
+        final WaterPurpleTerrain terrain;
+        final boolean terminalEnabled;
+        WaterPurpleTerminalExplosion terminalExplosion;
         BlockPos blockedTerrain;
         int age, ticks, waitingTicks;
         boolean stopped, closed, moving = true, visualEnded;
@@ -281,6 +287,8 @@ public final class WaterCurseService {
         private Beam(ServerPlayer player, ServerLevel level, Vec3 origin, Vec3 direction, int duration, Cast cast) {
             this.player = player; this.level = level; this.origin = origin; this.direction = direction; this.duration = duration;
             this.cast = cast;
+            terrain = new WaterPurpleTerrain(level, player);
+            terminalEnabled = WaterCurseConfig.TERMINAL_EXPLOSION.get();
             chunkLoader = cast != null && WaterCurseConfig.CHUNK_LOADING.get() ? new WaterPurpleChunkLoader(level) : null;
             range = WaterPurpleRules.range(duration); radius = WaterPurpleRules.breakRadius(duration);
             blockScan = new WaterPurpleBlockScan(origin, direction, range, radius, level.getMinBuildHeight(), level.getMaxBuildHeight() - 1);
@@ -290,6 +298,16 @@ public final class WaterCurseService {
             if (closed) return true;
             if (!player.isAlive() || player.isRemoved() || player.level() != level) { close(); return true; }
             ticks++;
+            if (terminalExplosion != null) {
+                if (chunkLoader != null) chunkLoader.trim(terminalExplosion.chunks, blockScan, false, null);
+                boolean done = terminalExplosion.tick(budget);
+                if (cast != null && !visualEnded) {
+                    if (terminalExplosion.started || done) { WaterCurseNetwork.broadcast(flight(true)); visualEnded = true; }
+                    else if (ticks % 5 == 0) WaterCurseNetwork.broadcast(flight(false));
+                }
+                if (done) { close(); return true; }
+                return false;
+            }
             boolean breaking = WaterCurseConfig.BREAK_BLOCKS.get() && player.mayBuild();
             double previousDistance = WaterPurpleRules.travelDistance(duration, age);
             double nextDistance = WaterPurpleRules.travelDistance(duration, age + 1);
@@ -330,6 +348,7 @@ public final class WaterCurseService {
                     target.invulnerableTime = invulnerable;
                 }
             }
+            if (closed) return true;
             for (int i = 0; breaking && i < budget; i++) {
                 BlockPos pos = blockedTerrain != null ? blockedTerrain : blockScan.pollReached(distance);
                 blockedTerrain = null;
@@ -351,22 +370,20 @@ public final class WaterCurseService {
                 }
                 progressed = true;
                 if (!level.isInWorldBounds(pos) || !level.hasChunkAt(pos)) continue;
-                BlockState state = level.getBlockState(pos);
-                if (!breakable(state, level, pos) || !level.mayInteract(player, pos)
-                        || MinecraftForge.EVENT_BUS.post(new BlockEvent.BreakEvent(level, pos, state, player))) continue;
-                if (level.getBlockState(pos) != state || level.getBlockEntity(pos) != null) continue;
-                // Use the real tool so ore drops follow enchantments; limit ore drops to ten percent.
-                if (ore(state) && level.random.nextFloat() < 0.1F)
-                    Block.dropResources(state, level, pos, null, player, player.getMainHandItem());
-                level.setBlock(pos, net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), 2);
+                terrain.process(pos);
             }
             if (chunkLoader != null && !progressed && ++waitingTicks > WaterCurseConfig.CHUNK_WAIT_TICKS.get()) { fail("chunk_wait_timeout"); return true; }
             if (progressed) waitingTicks = 0;
             if (cast != null && !visualEnded && (wasMoving != moving || ticks % 5 == 0 || age >= flightTicks || stopped)) {
-                boolean ended = age >= flightTicks || stopped;
+                boolean ended = stopped || (age >= flightTicks && !terminalEnabled);
                 WaterCurseNetwork.broadcast(flight(ended)); visualEnded = ended;
             }
-            if ((age >= flightTicks || stopped) && (!breaking || (blockedTerrain == null && blockScan.finished()))) { close(); return true; }
+            if ((age >= flightTicks || stopped) && (!breaking || (blockedTerrain == null && blockScan.finished()))) {
+                if (!stopped && terminalEnabled) {
+                    terminalExplosion = new WaterPurpleTerminalExplosion(level, player, origin.add(direction.scale(range)),
+                            duration, terrain, chunkLoader, cast != null);
+                } else { close(); return true; }
+            }
             return false;
         }
         private Set<ChunkPos> chunks(Vec3 start, Vec3 end, double radius) {
@@ -388,6 +405,7 @@ public final class WaterCurseService {
         void close() {
             if (closed) return;
             closed = true;
+            if (terminalExplosion != null) terminalExplosion.cancel();
             if (chunkLoader != null) chunkLoader.close();
             if (cast != null && !visualEnded) { WaterCurseNetwork.broadcast(flight(true)); visualEnded = true; }
         }

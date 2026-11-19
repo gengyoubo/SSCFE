@@ -34,6 +34,7 @@ import java.util.UUID;
 public final class WaterPurpleEffects {
     private record CastKey(UUID caster, ResourceLocation dimension, long startedAt) {}
     private static final Map<CastKey, Presentation> ACTIVE = new HashMap<>();
+    private static final Map<UUID, BurstPresentation> BURSTS = new HashMap<>();
     // Music fades independently of the projectile and can overlap a new creative cast.
     private static final Set<WaterPurpleMusicSound> PLAYING_MUSIC = new HashSet<>();
     private static final DustParticleOptions BLUE = new DustParticleOptions(new Vector3f(0.05F, 0.45F, 1F), 2F);
@@ -117,6 +118,16 @@ public final class WaterPurpleEffects {
         }
     }
 
+    public static void acceptBurst(WaterCurseNetwork.Burst packet) {
+        var mc = Minecraft.getInstance();
+        if (mc.level == null || !packet.dimension().equals(mc.level.dimension().location())) return;
+        if (packet.finished()) { BURSTS.remove(packet.id()); return; }
+        BURSTS.compute(packet.id(), (id, previous) -> {
+            if (previous == null) return new BurstPresentation(packet);
+            previous.packet = packet; previous.receivedAt = clientTicks; return previous;
+        });
+    }
+
     /** Animation time is tied to the server's casting timeline. */
     public static WaterPurpleAnimationTimeline.Sample animation(UUID player, float partialTick) {
         var mc = Minecraft.getInstance();
@@ -160,6 +171,10 @@ public final class WaterPurpleEffects {
             if (p.packet.dimension().equals(dimension)) p.particles();
             return false;
         });
+        BURSTS.values().removeIf(p -> {
+            if (clientTicks - p.receivedAt > 200 || p.age(0) >= 60) return true;
+            p.particles(); return false;
+        });
         PLAYING_MUSIC.removeIf(sound -> {
             if (!SscfeClientConfig.SPECIAL_MUSIC_ENABLED.get() || sound.isStopped() || sound.fadeFinished()) {
                 stopSound(sound); return true;
@@ -172,6 +187,7 @@ public final class WaterPurpleEffects {
     private static void clear() {
         ACTIVE.values().forEach(Presentation::stop);
         ACTIVE.clear();
+        BURSTS.clear();
         PLAYING_MUSIC.forEach(WaterPurpleEffects::stopSound);
         PLAYING_MUSIC.clear();
         currentDimension = null;
@@ -195,7 +211,7 @@ public final class WaterPurpleEffects {
     @SubscribeEvent public static void render(RenderLevelStageEvent event) {
         if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_PARTICLES) return;
         var mc = Minecraft.getInstance();
-        if (mc.level == null || ACTIVE.isEmpty()) return;
+        if (mc.level == null || (ACTIVE.isEmpty() && BURSTS.isEmpty())) return;
         var poses = event.getPoseStack();
         Vec3 camera = event.getCamera().getPosition();
         poses.pushPose(); poses.translate(-camera.x, -camera.y, -camera.z);
@@ -208,6 +224,11 @@ public final class WaterPurpleEffects {
                     || p.packet.casterPosition().distanceToSqr(camera) > renderDistance * renderDistance) continue;
             WaterPurpleAuraRenderer.render(smoke, poses.last().pose(), event.getCamera(), p.packet.casterPosition(),
                     p.elapsed() + event.getPartialTick(), p.packet.duration(), p.auraSeed());
+        }
+        for (BurstPresentation burst : BURSTS.values()) {
+            if (!burst.packet.dimension().equals(mc.level.dimension().location())
+                    || burst.packet.center().distanceToSqr(camera) > renderDistance * renderDistance) continue;
+            burst.render(smoke, poses.last().pose(), event.getCamera(), event.getPartialTick());
         }
         // Finish each render type before acquiring the next fallback buffer.
         buffer.endBatch(WaterPurpleAuraRenderer.SMOKE);
@@ -248,18 +269,83 @@ public final class WaterPurpleEffects {
         return new Vec3(Math.cos(latitude) * Math.cos(longitude), Math.sin(latitude), Math.cos(latitude) * Math.sin(longitude));
     }
     private static void ring(VertexConsumer out, Matrix4f matrix, Vec3 core, Vec3 side, Vec3 up, double radius, double rotation) {
+        ring(out, matrix, core, side, up, radius, rotation, 1D);
+    }
+    private static void ring(VertexConsumer out, Matrix4f matrix, Vec3 core, Vec3 side, Vec3 up, double radius, double rotation, double fade) {
+        int alpha = (int) (190D * fade);
         for (int i = 0; i < 48; i++) {
             double a = rotation + i * Math.PI * 2 / 48, b = rotation + (i + 1) * Math.PI * 2 / 48;
             Vec3 first = side.scale(Math.cos(a)).add(up.scale(Math.sin(a)));
             Vec3 second = side.scale(Math.cos(b)).add(up.scale(Math.sin(b)));
-            vertex(out, matrix, core.add(first.scale(radius)), 70, 210, 255, 190);
-            vertex(out, matrix, core.add(first.scale(radius + 0.12D)), 70, 210, 255, 190);
-            vertex(out, matrix, core.add(second.scale(radius + 0.12D)), 70, 210, 255, 190);
-            vertex(out, matrix, core.add(second.scale(radius)), 70, 210, 255, 190);
+            double width = Math.max(0.12D, radius * 0.025D);
+            vertex(out, matrix, core.add(first.scale(radius)), 70, 210, 255, alpha);
+            vertex(out, matrix, core.add(first.scale(radius + width)), 70, 210, 255, alpha);
+            vertex(out, matrix, core.add(second.scale(radius + width)), 70, 210, 255, alpha);
+            vertex(out, matrix, core.add(second.scale(radius)), 70, 210, 255, alpha);
         }
     }
     private static void vertex(VertexConsumer out, Matrix4f matrix, Vec3 v, int red, int green, int blue, int alpha) {
         out.vertex(matrix, (float) v.x, (float) v.y, (float) v.z).color(red, green, blue, alpha).endVertex();
+    }
+
+    private static final class BurstPresentation {
+        WaterCurseNetwork.Burst packet;
+        long receivedAt = clientTicks;
+        BurstPresentation(WaterCurseNetwork.Burst packet) { this.packet = packet; }
+        double age(float partial) {
+            double next = packet.age() + Math.min(5D, clientTicks - receivedAt + partial);
+            return packet.age() <= 30 ? Math.min(30D, next) : Math.min(60D, next);
+        }
+        double radius(double age) {
+            double power = packet.visualRadius() / 64D;
+            if (age < 4D) return Math.max(0.4D, (8D - age * 1.5D) * power);
+            double expansion = Math.min(Math.min(1D, (age - 4D) / 26D), packet.workProgress());
+            return packet.visualRadius() * Math.max(0.025D, expansion);
+        }
+        double opacity(double age) { return age <= 30D ? 1D : Math.max(0D, (60D - age) / 30D); }
+        void render(VertexConsumer out, Matrix4f matrix, net.minecraft.client.Camera camera, float partial) {
+            double age = age(partial), radius = radius(age), fade = opacity(age);
+            Vec3 center = packet.center();
+            sphere(out, matrix, center, radius, 30, 115, 255, (int) (65 * fade));
+            sphere(out, matrix, center, radius * 0.8D, 90, 195, 255, (int) (32 * fade));
+            if (age >= 4D && age < 9D)
+                sphere(out, matrix, center, Math.max(radius, packet.visualRadius() * 0.18D), 195, 245, 255,
+                        (int) (180D * (9D - age) / 5D));
+            if (age < 4D) {
+                ring(out, matrix, center, new Vec3(1, 0, 0), new Vec3(0, 0, 1), radius * 1.5D, age * 0.2D);
+                return;
+            }
+            var cameraRight = new Vector3f(1, 0, 0).rotate(camera.rotation());
+            var cameraUp = new Vector3f(0, 1, 0).rotate(camera.rotation());
+            Vec3 right = new Vec3(cameraRight.x, cameraRight.y, cameraRight.z);
+            Vec3 up = new Vec3(cameraUp.x, cameraUp.y, cameraUp.z);
+            int count = center.distanceToSqr(camera.getPosition()) < 128D * 128D ? 24 : 12;
+            for (int i = 0; i < count; i++) {
+                double y = 1D - 2D * (i + 0.5D) / count;
+                double theta = i * 2.39996D + age * 0.018D;
+                Vec3 radial = new Vec3(Math.sqrt(1D - y * y) * Math.cos(theta), y, Math.sqrt(1D - y * y) * Math.sin(theta));
+                WaterPurpleAuraRenderer.puff(out, matrix, center.add(radial.scale(radius)), right, up,
+                        Math.max(0.5D, radius * 0.15D), Math.max(0.4D, radius * 0.1D), 125, 205, 255, (int) (85 * fade));
+            }
+            ring(out, matrix, center, new Vec3(1, 0, 0), new Vec3(0, 0, 1), radius, age * 0.025D, fade);
+            ring(out, matrix, center, new Vec3(1, 0, 0), new Vec3(0, 1, 0), radius * 0.98D, -age * 0.03D, fade);
+        }
+        void particles() {
+            var mc = Minecraft.getInstance();
+            Vec3 center = packet.center(), camera = mc.gameRenderer.getMainCamera().getPosition();
+            double limit = SscfeClientConfig.PARTICLE_RENDER_DISTANCE.get();
+            if (center.distanceToSqr(camera) > limit * limit) return;
+            double age = age(0), radius = radius(age), fade = opacity(age);
+            int count = (int) (SscfeClientConfig.EFFECT_PARTICLES.get() * fade);
+            for (int i = 0; i < count; i++) {
+                double y = 1D - 2D * (i + 0.5D) / Math.max(1, count), theta = i * 2.39996D + clientTicks * 0.12D;
+                Vec3 radial = new Vec3(Math.sqrt(1D - y * y) * Math.cos(theta), y, Math.sqrt(1D - y * y) * Math.sin(theta));
+                Vec3 point = center.add(radial.scale(radius));
+                Vec3 speed = radial.scale(age < 4D ? -0.15D : 0.08D).add(0, age > 30D ? 0.05D : 0D, 0);
+                mc.level.addParticle(i % 4 == 0 ? ParticleTypes.CLOUD : i % 2 == 0 ? BLUE : CYAN,
+                        true, point.x, point.y, point.z, speed.x, speed.y, speed.z);
+            }
+        }
     }
 
     private static final class Presentation {

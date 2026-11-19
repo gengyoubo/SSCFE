@@ -102,7 +102,10 @@ public final class WaterFeatureGameTests {
             helper.assertTrue(!targets.get(2).isAlive(), "The same projectile reaches and kills the third monster");
             for (int tick = 13; tick < 60; tick++) helper.assertTrue(!beam.tick(8192),
                     "The projectile continues beyond the monsters until maximum range");
-            helper.assertTrue(beam.tick(8192), "Only reaching the range limit completes this projectile");
+            helper.assertTrue(!beam.tick(8192) && beam.terminalExplosion != null,
+                    "Reaching the range limit starts terminal processing instead of discarding it");
+            for (int tick = 0; tick < 59; tick++) helper.assertTrue(!beam.tick(8192), "Terminal visuals retain the final burst");
+            helper.assertTrue(beam.tick(8192), "Flight and the terminal burst finish before cleanup");
         } finally {
             targets.forEach(net.minecraft.world.entity.Entity::discard);
         }
@@ -200,7 +203,10 @@ public final class WaterFeatureGameTests {
             for (int tick = 8; tick < 60; tick++) {
                 helper.assertTrue(!beam.tick(8192), "The beam remains active until its full flight completes");
             }
-            helper.assertTrue(beam.tick(8192), "The three-hundred-block ray completes on tick sixty");
+            helper.assertTrue(!beam.tick(8192) && beam.terminalExplosion != null,
+                    "The three-hundred-block ray reaches its terminal burst on tick sixty");
+            for (int tick = 0; tick < 59; tick++) beam.tick(8192);
+            helper.assertTrue(beam.tick(8192), "The terminal burst then completes");
         } finally {
             target.discard();
             level.setBlock(terrain, Blocks.AIR.defaultBlockState(), 2);
