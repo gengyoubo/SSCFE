@@ -16,7 +16,9 @@
     "FormPowerRuntimeSoundMixin",
     "FormPowerRuntimeAccessoryGuardMixin",
     "FormActivePowerSoundResponseMixin",
-    "WaterPurpleMovementMixin"
+    "WaterPurpleMovementMixin",
+    "CompoundKineticCrossbowMixin",
+    "KineticArrowGravityMixin"
   ],
   "client": [
     "client.FormAnimationSystemMixin",
@@ -24,7 +26,8 @@
     "client.FormGeoModelMixin",
     "client.SpiderSaddleBoneMixin",
     "client.WaterPurpleMouseMixin",
-    "client.WaterPurplePoseMixin"
+    "client.WaterPurplePoseMixin",
+    "client.BowLikeHandRenderMixin"
   ],
   "injectors": {
     "defaultRequire": 1

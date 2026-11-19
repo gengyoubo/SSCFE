@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:item/crossbow",
+  "textures": {
+    "layer0": "sscfe:item/compound_kinetic_crossbow_pulling_0"
+  }
+}
