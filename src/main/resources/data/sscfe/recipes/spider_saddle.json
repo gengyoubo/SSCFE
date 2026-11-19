@@ -1,0 +1,26 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "SES",
+    "LXL",
+    "S S"
+  ],
+  "key": {
+    "S": {
+      "item": "minecraft:string"
+    },
+    "E": {
+      "item": "minecraft:spider_eye"
+    },
+    "L": {
+      "item": "minecraft:leather"
+    },
+    "X": {
+      "item": "minecraft:saddle"
+    }
+  },
+  "result": {
+    "item": "sscfe:spider_saddle"
+  }
+}

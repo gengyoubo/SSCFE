@@ -1,4 +1,8 @@
 {
+  "item.sscfe.spider_saddle": "Spider Saddle",
+  "item.sscfe.spider_saddle.tooltip": "Spider final form, back slot: other players in human or humanoid forms can right-click you to ride",
+  "message.sscfe.spider_saddle.mounted": "Riding the spider. Press Sneak to get off",
+  "message.sscfe.spider_saddle.carrier": "A player is riding on your back",
   "key.sscfe.form_interaction": "Multiplayer Interaction (hold and right-click a player)",
   "message.sscfe.axolotl_stack.joined": "Joined the axolotl stack. Press Sneak to leave",
   "message.sscfe.axolotl_stack.carrier": "Axolotl stack: press Sneak to let the player on your back down",

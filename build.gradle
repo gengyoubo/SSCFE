@@ -55,6 +55,17 @@ minecraft {
                 }
             }
         }
+        // Same harness for the Spider Saddle: screenshots go to run/screenshots/sscfe-spider-*.png.
+        spiderSaddleShowcase {
+            parent runs.client
+            property 'sscfe.showcase', 'spider'
+            args '--width', '1280', '--height', '720'
+            mods {
+                "${mod_id}" {
+                    source sourceSets.test
+                }
+            }
+        }
         data {
             workingDirectory project.file('run-data')
             args '--mod', mod_id, '--all', '--output', file('src/generated/resources/'), '--existing', file('src/main/resources/')
@@ -148,7 +159,7 @@ tasks.configureEach {
     if (name == 'runClient') {
         dependsOn 'classes', 'processResources', 'stageDevModDependencies'
     }
-    if (name == 'runStackShowcase') {
+    if (name == 'runStackShowcase' || name == 'runSpiderSaddleShowcase') {
         dependsOn 'classes', 'testClasses', 'processResources', 'stageDevModDependencies'
     }
 }

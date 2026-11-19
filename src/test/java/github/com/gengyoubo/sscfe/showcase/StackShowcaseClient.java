@@ -28,16 +28,25 @@ import java.util.List;
 @Mod.EventBusSubscriber(modid = Sscfe.MOD_ID, value = Dist.CLIENT)
 public final class StackShowcaseClient {
     private static final Logger LOGGER = LogUtils.getLogger();
-    private static final String WORLD = "sscfe-stack-showcase";
+    private static final String WORLD = "sscfe-" + StackShowcaseServer.SCENARIO + "-showcase";
     /** {degrees around the stack relative to the base's facing, camera distance, camera height, name}. */
     private static final Object[][] SHOTS = {
             {90.0, 3.2, 0.9, "side"},
             {135.0, 3.2, 1.3, "rear-quarter"},
             {40.0, 3.0, 1.1, "front-quarter"},
             {90.0, 1.8, 0.6, "side-close"},
+            // Idle burst from directly behind, where the abdomen's sideways sway is visible; 6 ticks apart.
+            {180.0, 1.4, 1.0, "back-0"}, {180.0, 1.4, 1.0, "back-1"}, {180.0, 1.4, 1.0, "back-2"},
+            {180.0, 1.4, 1.0, "back-3"}, {180.0, 1.4, 1.0, "back-4"}, {180.0, 1.4, 1.0, "back-5"},
+            {180.0, 1.4, 1.0, "back-6"}, {180.0, 1.4, 1.0, "back-7"},
     };
+    private static int shotDuration(int shot) {
+        return ((String) SHOTS[shot][3]).startsWith("back-") ? 6 : 20;
+    }
     private static boolean worldRequested;
     private static int readyTicks = -1, worldTicks;
+    /** Spider scenario: photograph the saddled spider alone first, then ask the server to mount the rider. */
+    private static boolean soloPhase = StackShowcaseServer.SPIDER;
 
     @SubscribeEvent
     public static void clientTick(TickEvent.ClientTickEvent event) {
@@ -58,7 +67,7 @@ public final class StackShowcaseClient {
                     .ifPresent(stack::add);
         }
         boolean ready = stack.size() == StackShowcaseServer.PLAYERS
-                && stack.stream().skip(1).allMatch(Player::isPassenger);
+                && (soloPhase || stack.stream().skip(1).allMatch(Player::isPassenger));
         if (!ready) {
             if (worldTicks > 1200) {
                 LOGGER.error("[stack-showcase] stack never became visible ({} players found)", stack.size());
@@ -77,13 +86,36 @@ public final class StackShowcaseClient {
             }
         }
         readyTicks++;
-        // Let forms sync and animations settle, then spend 20 ticks per shot: frame, wait, capture.
+        if (StackShowcaseServer.SPIDER && !soloPhase && readyTicks <= 120) {
+            // Measure the idle sway: the animated saddle top, body yaws and the rider's logical offset.
+            Player spider = stack.get(0), rider = stack.get(1);
+            Vec3 seat = github.com.gengyoubo.sscfe.client.SpiderSaddleRenderer.animatedSeat(spider);
+            Vec3 rel = rider.position().subtract(spider.position());
+            if (seat != null) LOGGER.info("[stack-showcase] sway t={} seat=({}, {}, {}) riderRel=({}, {}, {}) spiderBody={} swayDeg={}",
+                    readyTicks, f(seat.x), f(seat.y), f(seat.z), f(rel.x), f(rel.y), f(rel.z),
+                    f(spider.yBodyRot), f(github.com.gengyoubo.sscfe.client.SpiderSaddleRenderer.swayDegrees(spider)));
+        }
+        // Let forms sync and animations settle, then frame, wait and capture each shot.
         int phase = readyTicks - 80;
         if (phase < 0) return;
-        int shot = phase / 20, step = phase % 20;
-        if (shot >= SHOTS.length) { mc.stop(); return; }
+        int shot = 0, step = phase;
+        while (shot < SHOTS.length && step >= shotDuration(shot)) step -= shotDuration(shot++);
+        if (shot >= SHOTS.length) {
+            if (soloPhase) {
+                soloPhase = false;
+                readyTicks = -1;
+                StackShowcaseServer.requestMount = true;
+            } else {
+                mc.stop();
+            }
+            return;
+        }
         if (step == 0) frame(mc, stack.get(0), SHOTS[shot]);
-        if (step == 15) shoot(mc, (String) SHOTS[shot][3]);
+        if (step == shotDuration(shot) - 5 + (shotDuration(shot) == 6 ? 4 : 0)) shoot(mc, (soloPhase ? "solo-" : "") + SHOTS[shot][3]);
+    }
+
+    private static String f(double value) {
+        return String.format("%.4f", value);
     }
 
     private static void openWorld(Minecraft mc) {
@@ -116,7 +148,7 @@ public final class StackShowcaseClient {
     }
 
     private static void shoot(Minecraft mc, String name) {
-        Screenshot.grab(mc.gameDirectory, "sscfe-stack-" + name + ".png", mc.getMainRenderTarget(),
+        Screenshot.grab(mc.gameDirectory, "sscfe-" + StackShowcaseServer.SCENARIO + "-" + name + ".png", mc.getMainRenderTarget(),
                 message -> LOGGER.info("[stack-showcase] {}", message.getString()));
     }
 

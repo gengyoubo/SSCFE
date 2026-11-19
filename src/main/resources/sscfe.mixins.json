@@ -7,6 +7,7 @@
   "mixins": [
     "AxolotlStackPlayerMixin",
     "AxolotlStackPositionMixin",
+    "SpiderSaddlePositionMixin",
     "AxolotlMoistureMixin",
     "MorphscaleArmorRepairMixin",
     "MoonAdaptationArmorMixin",
@@ -21,6 +22,7 @@
     "client.FormAnimationSystemMixin",
     "client.FormGeoAnimatableMixin",
     "client.FormGeoModelMixin",
+    "client.SpiderSaddleBoneMixin",
     "client.WaterPurpleMouseMixin",
     "client.WaterPurplePoseMixin"
   ],

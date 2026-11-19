@@ -1,6 +1,7 @@
 {
   "replace": false,
   "values": [
-    "sscfe:large_water_tank"
+    "sscfe:large_water_tank",
+    "sscfe:spider_saddle"
   ]
 }
