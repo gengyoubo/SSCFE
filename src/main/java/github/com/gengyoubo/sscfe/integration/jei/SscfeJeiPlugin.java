@@ -10,6 +10,15 @@ import mezz.jei.api.recipe.vanilla.IJeiAnvilRecipe;
 import mezz.jei.api.registration.IRecipeRegistration;
 import mezz.jei.api.registration.IExtraIngredientRegistration;
 import net.minecraft.network.chat.Component;
+import net.minecraft.core.NonNullList;
+import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.alchemy.PotionUtils;
+import net.minecraft.world.item.crafting.CraftingBookCategory;
+import net.minecraft.world.item.crafting.CraftingRecipe;
+import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.world.item.crafting.ShapelessRecipe;
+import net.minecraftforge.common.crafting.StrictNBTIngredient;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -34,6 +43,7 @@ public final class SscfeJeiPlugin implements IModPlugin {
 
     @Override
     public void registerRecipes(IRecipeRegistration registration) {
+        addFloatingMoondustRecipes(registration);
         List<Item> armorItems = List.of(
                 ModItems.MORPHSCALE_HEADRING.get(), ModItems.MORPHSCALE_VEST.get(),
                 ModItems.MORPHSCALE_CUISH.get(), ModItems.MORPHSCALE_ANKLET.get(),
@@ -66,6 +76,29 @@ public final class SscfeJeiPlugin implements IModPlugin {
                 Component.translatable("jei.sscfe.moon_adaptation"));
         registration.addIngredientInfo(new ItemStack(ModMoonContent.EDIBLE_MOONDUST.get()), VanillaTypes.ITEM_STACK,
                 Component.translatable("jei.sscfe.edible_moondust"));
+    }
+
+    private static void addFloatingMoondustRecipes(IRecipeRegistration registration) {
+        List<CraftingRecipe> recipes = new ArrayList<>();
+        ForgeRegistries.POTIONS.getValues().forEach(potion -> {
+            int minutes = potion.getEffects().stream()
+                    .filter(effect -> effect.getEffect() == MobEffects.LEVITATION)
+                    .mapToInt(effect -> effect.getDuration() / 1200)
+                    .max().orElse(0);
+            if (minutes < 1 || minutes > 8) return;
+            var potionId = ForgeRegistries.POTIONS.getKey(potion);
+            ItemStack potionStack = PotionUtils.setPotion(new ItemStack(Items.POTION), potion);
+            NonNullList<Ingredient> ingredients = NonNullList.create();
+            ingredients.add(StrictNBTIngredient.of(potionStack));
+            for (int i = 0; i < minutes; i++) ingredients.add(Ingredient.of(ModItems.UNTREATED_MOONDUST.get()));
+            recipes.add(new ShapelessRecipe(
+                    ResourceLocation.fromNamespaceAndPath(Sscfe.MOD_ID,
+                            "jei/floating_moondust/" + potionId.getNamespace() + "/" + potionId.getPath()),
+                    "", CraftingBookCategory.MISC, new ItemStack(ModMoonContent.FLOATING_MOONDUST.get(), minutes), ingredients));
+        });
+        registration.addRecipes(RecipeTypes.CRAFTING, recipes);
+        registration.addIngredientInfo(new ItemStack(ModMoonContent.FLOATING_MOONDUST.get()), VanillaTypes.ITEM_STACK,
+                Component.translatable("jei.sscfe.floating_moondust"));
     }
 
     private static void addMoonAdaptationRecipes(IRecipeRegistration registration, List<IJeiAnvilRecipe> recipes) {

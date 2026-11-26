@@ -1,4 +1,5 @@
 {
+  "jei.sscfe.floating_moondust": "Shapeless: combine a levitation potion with one Untreated Moondust per full minute of levitation to make the same number of Floating Moondust. The bottle is returned; custom effect durations also work.",
   "jei.sscfe.moon_lightweight": "Shapelessly craft a book, a Lightweight Core, and seven Floating Moondust. Apply the enchantment to tools in an anvil to bypass form tool restrictions and repair them using Floating Moondust.",
   "jei.sscfe.lightweight_core": "In a smithing table, use the core as the template and a diamond or netherite tool as the base. Add a Nether Star for a Lightweight Core, or Floating Moondust for a Super Lightweight Core.",
   "item.sscfe.lightweight_core": "Lightweight Core",
