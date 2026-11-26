@@ -1,0 +1,9 @@
+{
+  "type": "sscfe:lightweight_upgrade",
+  "template": {
+    "item": "sscfe:super_lightweight_core"
+  },
+  "addition": {
+    "item": "sscfe:floating_moondust"
+  }
+}

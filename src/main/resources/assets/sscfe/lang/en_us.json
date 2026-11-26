@@ -1,4 +1,10 @@
 {
+  "jei.sscfe.moon_lightweight": "Shapelessly craft a book, a Lightweight Core, and seven Floating Moondust. Apply the enchantment to tools in an anvil to bypass form tool restrictions and repair them using Floating Moondust.",
+  "jei.sscfe.lightweight_core": "In a smithing table, use the core as the template and a diamond or netherite tool as the base. Add a Nether Star for a Lightweight Core, or Floating Moondust for a Super Lightweight Core.",
+  "item.sscfe.lightweight_core": "Lightweight Core",
+  "item.sscfe.super_lightweight_core": "Super Lightweight Core",
+  "enchantment.sscfe.moon_lightweight": "Moon Lightweight",
+  "item.sscfe.floating_moondust": "Floating Moondust",
   "item.sscfe.compound_kinetic_crossbow": "Compound Kinetic Crossbow",
   "item.sscfe.spider_saddle": "Spider Saddle",
   "item.sscfe.spider_saddle.tooltip": "Spider final form, back slot: other players in human or humanoid forms can right-click you to ride",
@@ -71,5 +77,9 @@
   "enchantment.sscfe.moon_adaptation": "Moon Adaptation",
   "item.sscfe.edible_moondust": "Edible Moondust",
   "jei.sscfe.moon_adaptation": "Shapelessly craft one book, one Morphscale Core, and seven Untreated Moondust into a Moon Adaptation enchanted book. Apply it to armor or elytra in an anvil to bypass form equipment restrictions and allow repairs with Untreated Moondust. Each moondust repairs up to one quarter of maximum durability. Maximum level: I. Compatible with existing enchantments.",
-  "jei.sscfe.edible_moondust": "Craft five with XYX / YXY / XYX, where X is any food and Y is Untreated Moondust. All forms can eat it regardless of instinctive dietary restrictions. Each serving restores 3 hunger and 3 saturation."
+  "jei.sscfe.edible_moondust": "Craft five with XYX / YXY / XYX, where X is any food and Y is Untreated Moondust. All forms can eat it regardless of instinctive dietary restrictions. Each serving restores 3 hunger and 3 saturation.",
+  "item.minecraft.potion.effect.levitation": "Potion of Levitation",
+  "item.minecraft.splash_potion.effect.levitation": "Splash Potion of Levitation",
+  "item.minecraft.lingering_potion.effect.levitation": "Lingering Potion of Levitation",
+  "item.minecraft.tipped_arrow.effect.levitation": "Arrow of Levitation"
 }

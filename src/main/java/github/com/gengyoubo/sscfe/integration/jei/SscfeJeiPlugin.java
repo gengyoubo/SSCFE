@@ -29,7 +29,7 @@ public final class SscfeJeiPlugin implements IModPlugin {
 
     @Override
     public void registerExtraIngredients(IExtraIngredientRegistration registration) {
-        registration.addExtraIngredients(VanillaTypes.ITEM_STACK, List.of(ModMoonContent.adaptationBook()));
+        registration.addExtraIngredients(VanillaTypes.ITEM_STACK, List.of(ModMoonContent.adaptationBook(), ModMoonContent.lightweightBook()));
     }
 
     @Override
@@ -54,6 +54,11 @@ public final class SscfeJeiPlugin implements IModPlugin {
             infoItems.add(new ItemStack(armorItems.get(index)));
         }
         addMoonAdaptationRecipes(registration, recipes);
+        registration.addIngredientInfo(ModMoonContent.lightweightBook(), VanillaTypes.ITEM_STACK,
+                Component.translatable("jei.sscfe.moon_lightweight"));
+        registration.addIngredientInfo(List.of(new ItemStack(ModMoonContent.LIGHTWEIGHT_CORE.get()),
+                new ItemStack(ModMoonContent.SUPER_LIGHTWEIGHT_CORE.get())), VanillaTypes.ITEM_STACK,
+                Component.translatable("jei.sscfe.lightweight_core"));
         registration.addRecipes(RecipeTypes.ANVIL, recipes);
         registration.addIngredientInfo(infoItems, VanillaTypes.ITEM_STACK,
                 Component.translatable("jei.sscfe.moondust_armor_repair"));

@@ -11,6 +11,8 @@
     "AxolotlMoistureMixin",
     "MorphscaleArmorRepairMixin",
     "MoonAdaptationArmorMixin",
+    "MoonLightweightMixin",
+    "MoonLightweightRepairMixin",
     "EdibleMoondustMixin",
     "MobGoalSelectorAccessor",
     "FormPowerRuntimeSoundMixin",

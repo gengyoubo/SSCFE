@@ -1,4 +1,10 @@
 {
+  "jei.sscfe.moon_lightweight": "书、轻装核心和七个漂浮的月之尘无序合成为附魔书。在铁砧中用于工具后可无视形态的工具使用限制，并可用漂浮的月之尘修复。",
+  "jei.sscfe.lightweight_core": "锻造台中将核心放在模板槽、钻石或下界合金工具放在中间；普通核心搭配下界之星，超级核心搭配漂浮的月之尘。",
+  "item.sscfe.lightweight_core": "轻装核心",
+  "item.sscfe.super_lightweight_core": "超级轻装核心",
+  "enchantment.sscfe.moon_lightweight": "月之轻装",
+  "item.sscfe.floating_moondust": "漂浮的月之尘",
   "item.sscfe.compound_kinetic_crossbow": "复合动能弩",
   "item.sscfe.spider_saddle": "蜘蛛鞍",
   "item.sscfe.spider_saddle.tooltip": "蜘蛛最终形态·背部：人类或人形形态的其他玩家右键你即可骑乘",
@@ -865,5 +871,9 @@
   "enchantment.sscfe.moon_adaptation": "月之适配",
   "item.sscfe.edible_moondust": "可食用月尘",
   "jei.sscfe.moon_adaptation": "将一本书、一个塑形核心和七份未加工的月之尘无序合成为月之适配附魔书。在铁砧中应用于盔甲或鞘翅后，装备可无视形态穿戴限制，并使用未加工的月之尘修复。每份月之尘最多修复最大耐久的四分之一。等级上限为 I，可与已有附魔共存。",
-  "jei.sscfe.edible_moondust": "按食物/月之尘交替排列：XYX / YXY / XYX（X 为任意食物，Y 为未加工的月之尘），合成五份。所有形态均可食用，不受本能饮食限制，每份恢复 3 点饥饿值和 3 点饱和度。"
+  "jei.sscfe.edible_moondust": "按食物/月之尘交替排列：XYX / YXY / XYX（X 为任意食物，Y 为未加工的月之尘），合成五份。所有形态均可食用，不受本能饮食限制，每份恢复 3 点饥饿值和 3 点饱和度。",
+  "item.minecraft.potion.effect.levitation": "漂浮药水",
+  "item.minecraft.splash_potion.effect.levitation": "喷溅型漂浮药水",
+  "item.minecraft.lingering_potion.effect.levitation": "滞留型漂浮药水",
+  "item.minecraft.tipped_arrow.effect.levitation": "漂浮之箭"
 }

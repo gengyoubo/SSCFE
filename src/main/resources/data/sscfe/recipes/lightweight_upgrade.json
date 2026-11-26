@@ -1,0 +1,9 @@
+{
+  "type": "sscfe:lightweight_upgrade",
+  "template": {
+    "item": "sscfe:lightweight_core"
+  },
+  "addition": {
+    "item": "minecraft:nether_star"
+  }
+}

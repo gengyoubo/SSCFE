@@ -4,6 +4,7 @@ import github.com.gengyoubo.sscfe.client.SscfeClientConfig;
 import github.com.gengyoubo.sscfe.init.ModForms;
 import github.com.gengyoubo.sscfe.init.ModInteractionContent;
 import github.com.gengyoubo.sscfe.init.ModMoonContent;
+import github.com.gengyoubo.sscfe.init.ModPotionContent;
 import github.com.gengyoubo.sscfe.init.ModWaterContent;
 import github.com.gengyoubo.sscfe.init.ModWaterSounds;
 import github.com.gengyoubo.sscfe.init.ModWeaponContent;
@@ -28,6 +29,7 @@ public final class Sscfe {
         FormInteractionNetwork.initialize();
         ModInteractionContent.register(FMLJavaModLoadingContext.get().getModEventBus());
         ModMoonContent.register(FMLJavaModLoadingContext.get().getModEventBus());
+        ModPotionContent.register(FMLJavaModLoadingContext.get().getModEventBus());
         ModWeaponContent.register(FMLJavaModLoadingContext.get().getModEventBus());
         registerForms();
         ModLoadingContext.get().registerConfig(ModConfig.Type.CLIENT, SscfeClientConfig.SPEC, "sscfe-client.toml");

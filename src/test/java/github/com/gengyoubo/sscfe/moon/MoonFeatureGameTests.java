@@ -8,6 +8,9 @@ import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.SimpleContainer;
+import net.minecraft.world.item.crafting.SmithingRecipe;
+import net.onixary.shapeShifterCurseForge.items.MorphScaleItems;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
@@ -17,6 +20,8 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.CraftingRecipe;
+import net.minecraft.world.item.alchemy.PotionUtils;
+import net.minecraft.world.item.alchemy.Potions;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.Level;
@@ -59,6 +64,80 @@ public final class MoonFeatureGameTests {
                 "Food recipe makes five edible moondust");
         grid.setItem(0, new ItemStack(Items.COBBLESTONE));
         helper.assertTrue(!foodRecipe.matches(grid, helper.getLevel()), "Non-food cannot substitute for food");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void floatingMoondustRecipe(GameTestHelper helper) {
+        var grid = grid();
+        CraftingRecipe recipe = recipe(helper, "floating_moondust");
+        grid.setItem(4, PotionUtils.setPotion(new ItemStack(Items.POTION), Potions.SLOW_FALLING));
+        grid.setItem(8, new ItemStack(ModItems.UNTREATED_MOONDUST.get(), 12));
+        helper.assertTrue(recipe.matches(grid, helper.getLevel()), "90 seconds requires one dust slot");
+        helper.assertTrue(recipe.assemble(grid, helper.getLevel().registryAccess()).getCount() == 1,
+                "90 seconds produces one dust");
+        helper.assertTrue(recipe.getRemainingItems(grid).get(4).is(Items.GLASS_BOTTLE), "Potion returns a bottle");
+        grid.setItem(4, PotionUtils.setPotion(new ItemStack(Items.POTION), Potions.LONG_SLOW_FALLING));
+        helper.assertTrue(!recipe.matches(grid, helper.getLevel()), "A stack in one slot cannot supply four ingredients");
+        for (int i = 0; i < 3; i++) grid.setItem(i, new ItemStack(ModItems.UNTREATED_MOONDUST.get()));
+        helper.assertTrue(recipe.matches(grid, helper.getLevel()), "Four-minute potion accepts four dust slots");
+        ItemStack output = recipe.assemble(grid, helper.getLevel().registryAccess());
+        helper.assertTrue(output.is(ModMoonContent.FLOATING_MOONDUST.get()) && output.getCount() == 4,
+                "Four-minute potion produces four floating dust");
+        grid.setItem(7, new ItemStack(Items.APPLE));
+        helper.assertTrue(!recipe.matches(grid, helper.getLevel()), "Unrelated items invalidate recipe");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void lightweightTools(GameTestHelper helper) throws Exception {
+        var access = helper.getLevel().registryAccess();
+        for (String name : new String[]{"lightweight_upgrade", "super_lightweight_upgrade"}) {
+            SmithingRecipe upgrade = (SmithingRecipe) helper.getLevel().getRecipeManager()
+                    .byKey(ResourceLocation.fromNamespaceAndPath(Sscfe.MOD_ID, name)).orElseThrow();
+            ItemStack core = new ItemStack(name.startsWith("super_") ? ModMoonContent.SUPER_LIGHTWEIGHT_CORE.get() : ModMoonContent.LIGHTWEIGHT_CORE.get());
+            ItemStack material = new ItemStack(name.startsWith("super_") ? ModMoonContent.FLOATING_MOONDUST.get() : Items.NETHER_STAR);
+            for (Item item : new Item[]{Items.DIAMOND_PICKAXE, Items.NETHERITE_SWORD}) {
+                ItemStack tool = new ItemStack(item);
+                tool.setDamageValue(20);
+                tool.enchant(Enchantments.UNBREAKING, 2);
+                SimpleContainer input = new SimpleContainer(core, tool, material);
+                helper.assertTrue(upgrade.matches(input, helper.getLevel()), "Core accepts diamond and netherite tools");
+                ItemStack result = upgrade.assemble(input, access);
+                helper.assertTrue(MorphScaleItems.isMorphScaleItem(result) && result.getDamageValue() == 20
+                        && EnchantmentHelper.getItemEnchantmentLevel(Enchantments.UNBREAKING, result) == 2,
+                        "Upgrade preserves data and bypasses morphscale restrictions");
+            }
+            helper.assertTrue(!upgrade.isBaseIngredient(new ItemStack(Items.IRON_PICKAXE)), "Iron tools are not accepted");
+        }
+        var grid = grid();
+        grid.setItem(0, new ItemStack(Items.BOOK));
+        grid.setItem(8, new ItemStack(ModMoonContent.LIGHTWEIGHT_CORE.get()));
+        for (int i = 1; i < 8; i++) grid.setItem(i, new ItemStack(ModMoonContent.FLOATING_MOONDUST.get()));
+        CraftingRecipe bookRecipe = recipe(helper, "moon_lightweight_book");
+        helper.assertTrue(bookRecipe.matches(grid, helper.getLevel()), "Book recipe accepts the ingredients");
+        ItemStack book = bookRecipe.assemble(grid, access);
+        helper.assertTrue(EnchantmentHelper.getEnchantments(book).getOrDefault(ModMoonContent.MOON_LIGHTWEIGHT.get(), 0) == 1,
+                "Book has Moon Lightweight I");
+        var player = new TestPlayer(helper.getLevel());
+        ItemStack tool = new ItemStack(Items.DIAMOND_PICKAXE);
+        tool.setDamageValue(200);
+        var anvil = new AnvilMenu(0, player.getInventory());
+        anvil.getSlot(0).set(tool);
+        anvil.getSlot(1).set(book);
+        anvil.createResult();
+        tool = anvil.getSlot(2).getItem().copy();
+        helper.assertTrue(MoonLightweightEnchantment.isLightweight(tool) && MorphScaleItems.isMorphScaleItem(tool),
+                "Anvil applies the enchantment and tool passes morphscale item condition");
+        anvil.getSlot(0).set(tool);
+        anvil.getSlot(1).set(new ItemStack(ModMoonContent.FLOATING_MOONDUST.get()));
+        anvil.createResult();
+        helper.assertTrue(!anvil.getSlot(2).getItem().isEmpty() && anvil.getSlot(2).getItem().getDamageValue() < 200,
+                "Floating moondust repairs enchanted tools");
+        var prevents = FormPowerEvents.class.getDeclaredMethod("preventsItemUse", Player.class, ItemStack.class);
+        prevents.setAccessible(true);
+        form(player, "shape-shifter-curse:allay_sp");
+        helper.assertTrue(!(boolean) prevents.invoke(null, player, tool), "Enchanted tool bypasses item use restrictions");
         helper.succeed();
     }
 

@@ -1,0 +1,26 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "SMS",
+    "MAM",
+    "GGG"
+  ],
+  "key": {
+    "M": {
+      "item": "sscfe:floating_moondust"
+    },
+    "A": {
+      "item": "minecraft:diamond"
+    },
+    "S": {
+      "item": "minecraft:amethyst_shard"
+    },
+    "G": {
+      "item": "minecraft:gold_ingot"
+    }
+  },
+  "result": {
+    "item": "sscfe:lightweight_core"
+  }
+}
