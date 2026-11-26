@@ -37,12 +37,18 @@ import java.util.UUID;
  */
 @Mod.EventBusSubscriber(modid = Sscfe.MOD_ID)
 public final class StackShowcaseServer {
-    /** "stack" (axolotl stack) or "spider" (Spider Saddle ride). */
+    /** "stack" (axolotl stack), "chain" (axolotl chain) or "spider" (Spider Saddle ride). */
     static final String SCENARIO = System.getProperty("sscfe.showcase",
             Boolean.getBoolean("sscfe.stackShowcase") ? "stack" : "");
     static final boolean ENABLED = !SCENARIO.isEmpty();
     static final boolean SPIDER = "spider".equals(SCENARIO);
+    static final boolean CHAIN = "chain".equals(SCENARIO);
     static final int PLAYERS = SPIDER ? 2 : 4;
+    /** Chain scenario: per-tick crawl of the head, set by the client once the still shots are taken. */
+    static volatile double headSpeed;
+    /** Chain scenario: per-tick turn of the head in degrees, set by the client for the turning shots. */
+    static volatile float headTurn;
+    private static float headYaw = 90F;
     static final String NAME_PREFIX = "showcase-";
     private static final Logger LOGGER = LogUtils.getLogger();
     private static final List<ShowcasePlayer> FAKES = new ArrayList<>();
@@ -69,7 +75,14 @@ public final class StackShowcaseServer {
         }
         if (tick > 60) for (ShowcasePlayer fake : FAKES) {
             // Keep the base facing a fixed direction so screenshots are reproducible.
-            if (!fake.isPassenger()) { fake.setYRot(90F); fake.setYHeadRot(90F); fake.setYBodyRot(90F); }
+            if (!fake.isPassenger()) { fake.setYRot(headYaw); fake.setYHeadRot(headYaw); fake.setYBodyRot(headYaw); }
+        }
+        // Yaw 90 faces -X: the head crawls forward (and later turns) and drags the chain behind it.
+        if (CHAIN && headSpeed > 0 && tick > 60 && !FAKES.isEmpty()) {
+            headYaw += headTurn;
+            ShowcasePlayer head = FAKES.get(0);
+            double yaw = Math.toRadians(headYaw);
+            head.setPos(head.getX() - Math.sin(yaw) * headSpeed, head.getY(), head.getZ() + Math.cos(yaw) * headSpeed);
         }
     }
 
@@ -86,7 +99,9 @@ public final class StackShowcaseServer {
         for (int i = 0; i < PLAYERS; i++) {
             ShowcasePlayer fake = new ShowcasePlayer(level, NAME_PREFIX + i);
             double angle = Math.PI * 2 * i / PLAYERS;
-            Vec3 at = i == 0 ? base : base.add(Math.cos(angle) * 0.9D, 0, Math.sin(angle) * 0.9D);
+            // The chain head faces -X, so followers line up on +X behind it.
+            Vec3 at = i == 0 ? base : CHAIN ? base.add(i * 1.2D, 0, 0)
+                    : base.add(Math.cos(angle) * 0.9D, 0, Math.sin(angle) * 0.9D);
             fake.moveTo(at.x, at.y, at.z, 90F, 0F);
             if (!SPIDER) {
                 FormManager.setForm(fake, ResourceLocation.fromNamespaceAndPath("shape-shifter-curse", "axolotl_3"), false);
@@ -109,6 +124,7 @@ public final class StackShowcaseServer {
         ShowcasePlayer base = FAKES.get(0);
         for (int i = 1; i < FAKES.size(); i++) {
             boolean ok = SPIDER ? SpiderSaddleService.tryMount(FAKES.get(i), base)
+                    : CHAIN ? AxolotlStackService.tryChain(FAKES.get(i), FAKES.get(i - 1))
                     : AxolotlStackService.tryStack(FAKES.get(i), base);
             LOGGER.info("[stack-showcase] {} joins stack: {}", FAKES.get(i).getGameProfile().getName(), ok);
         }
@@ -127,6 +143,9 @@ public final class StackShowcaseServer {
         tick = -1;
         mounted = false;
         requestMount = false;
+        headSpeed = 0;
+        headTurn = 0;
+        headYaw = 90F;
     }
 
     /** Forge FakePlayer.tick() is empty; run the normal player tick so physics and riding work. */

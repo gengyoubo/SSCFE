@@ -18,7 +18,7 @@ public abstract class FormAnimationSystemMixin {
     @Inject(method = "select", at = @At("HEAD"), cancellable = true, remap = false)
     private static void sscfe$stackAnimation(Player player,
                                             CallbackInfoReturnable<FormAnimationSystem.Selection> cir) {
-        if (!AxolotlStackService.isStacked(player)) return;
+        if (!AxolotlStackService.isLinked(player)) return;
         String form = FormManager.current(player).id().getPath();
         boolean moving = !player.isPassenger() && player.walkAnimation.speed() > 0.01F;
         String animation = "axolotl_3".equals(form) ? (moving ? "axolotl_3_crawling" : "axolotl_3_crawling_idle")

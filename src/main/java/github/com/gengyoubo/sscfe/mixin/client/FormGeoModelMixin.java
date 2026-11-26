@@ -1,5 +1,6 @@
 package github.com.gengyoubo.sscfe.mixin.client;
 
+import github.com.gengyoubo.sscfe.client.AxolotlChainPose;
 import github.com.gengyoubo.sscfe.client.SurfaceSprintOverlayAccess;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Player;
@@ -29,6 +30,8 @@ public abstract class FormGeoModelMixin {
             BedrockAnimationPlayer.applyAdditiveGeoRotation((FormGeoModel) (Object) this,
                     SSCFE_SURFACE_SPRINT_ANIMATION, SSCFE_SURFACE_SPRINT_ID, time);
         }
+        // Runs last: a chained player's held tail and reaching arms replace the crawl pose above.
+        AxolotlChainPose.apply((FormGeoModel) (Object) this, animatable, animationState.getPartialTick());
     }
 
     @Inject(method = "applyAxolotlElytraTail", at = @At("TAIL"), remap = false)

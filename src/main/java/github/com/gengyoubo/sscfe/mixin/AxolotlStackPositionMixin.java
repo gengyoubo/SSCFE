@@ -1,5 +1,6 @@
 package github.com.gengyoubo.sscfe.mixin;
 
+import github.com.gengyoubo.sscfe.interaction.AxolotlChainPhysics;
 import github.com.gengyoubo.sscfe.interaction.AxolotlStackService;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Pose;
@@ -15,7 +16,13 @@ public abstract class AxolotlStackPositionMixin {
             at = @At("HEAD"), cancellable = true)
     private void sscfe$positionOnBack(Entity passenger, Entity.MoveFunction move, CallbackInfo ci) {
         Entity carrier = (Entity) (Object) this;
-        if (!carrier.hasPassenger(passenger) || !AxolotlStackService.isStackLink(carrier, passenger)) return;
+        if (!carrier.hasPassenger(passenger)) return;
+        if (AxolotlStackService.isChainLink(carrier, passenger)) {
+            AxolotlChainPhysics.follow((Player) carrier, (Player) passenger, move);
+            ci.cancel();
+            return;
+        }
+        if (!AxolotlStackService.isStackLink(carrier, passenger)) return;
         Player base = (Player) carrier, upper = (Player) passenger;
         base.setPose(Pose.SWIMMING);
         upper.setPose(Pose.SWIMMING);

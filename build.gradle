@@ -55,6 +55,18 @@ minecraft {
                 }
             }
         }
+        // Same harness for the axolotl chain: screenshots go to run/screenshots/sscfe-chain-*.png.
+        // The name must sort after 'client': ForgeGradle merges parent runs in name order.
+        stackChainShowcase {
+            parent runs.client
+            property 'sscfe.showcase', 'chain'
+            args '--width', '1280', '--height', '720'
+            mods {
+                "${mod_id}" {
+                    source sourceSets.test
+                }
+            }
+        }
         // Same harness for the Spider Saddle: screenshots go to run/screenshots/sscfe-spider-*.png.
         spiderSaddleShowcase {
             parent runs.client
@@ -159,7 +171,7 @@ tasks.configureEach {
     if (name == 'runClient') {
         dependsOn 'classes', 'processResources', 'stageDevModDependencies'
     }
-    if (name == 'runStackShowcase' || name == 'runSpiderSaddleShowcase') {
+    if (name == 'runStackShowcase' || name == 'runSpiderSaddleShowcase' || name == 'runStackChainShowcase') {
         dependsOn 'classes', 'testClasses', 'processResources', 'stageDevModDependencies'
     }
 }

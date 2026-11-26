@@ -16,33 +16,33 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(value = Player.class, priority = 1100)
 public abstract class AxolotlStackPlayerMixin implements AxolotlStackAccess {
     @Unique
-    private static final EntityDataAccessor<Boolean> sscfe$STACK_RIDER =
-            SynchedEntityData.defineId(Player.class, EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<Byte> sscfe$LINK_MODE =
+            SynchedEntityData.defineId(Player.class, EntityDataSerializers.BYTE);
 
     @Inject(method = "defineSynchedData", at = @At("TAIL"))
     private void sscfe$defineStackFlag(CallbackInfo ci) {
-        ((Player) (Object) this).getEntityData().define(sscfe$STACK_RIDER, false);
+        ((Player) (Object) this).getEntityData().define(sscfe$LINK_MODE, NONE);
     }
 
-    @Override public boolean sscfe$isStackRider() {
-        return ((Player) (Object) this).getEntityData().get(sscfe$STACK_RIDER);
+    @Override public byte sscfe$linkMode() {
+        return ((Player) (Object) this).getEntityData().get(sscfe$LINK_MODE);
     }
 
-    @Override public void sscfe$setStackRider(boolean value) {
-        ((Player) (Object) this).getEntityData().set(sscfe$STACK_RIDER, value);
+    @Override public void sscfe$setLinkMode(byte mode) {
+        ((Player) (Object) this).getEntityData().set(sscfe$LINK_MODE, mode);
     }
 
     @Inject(method = "updatePlayerPose", at = @At("HEAD"), cancellable = true)
     private void sscfe$stackCrawl(CallbackInfo ci) {
         Player player = (Player) (Object) this;
-        if (AxolotlStackService.isStacked(player)) {
+        if (AxolotlStackService.isLinked(player)) {
             player.setPose(Pose.SWIMMING);
             ci.cancel();
         }
     }
 
-    // Forge's default is a seated rider. Stack participants lie on each other's backs.
+    // Forge's default is a seated rider. Stack and chain participants lie on the ground or each other.
     public boolean shouldRiderSit() {
-        return !AxolotlStackService.isStacked((Player) (Object) this);
+        return !AxolotlStackService.isLinked((Player) (Object) this);
     }
 }

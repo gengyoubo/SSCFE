@@ -15,24 +15,25 @@ import java.util.function.Supplier;
 public final class FormInteractionNetwork {
     private static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
             ResourceLocation.fromNamespaceAndPath(Sscfe.MOD_ID, "form_interaction"),
-            () -> "1", "1"::equals, "1"::equals);
+            () -> "2", "2"::equals, "2"::equals);
 
     public static void initialize() {
         CHANNEL.registerMessage(0, Interact.class, Interact::encode, Interact::decode, Interact::handle,
                 Optional.of(NetworkDirection.PLAY_TO_SERVER));
     }
 
-    public static void interact(int targetId) { CHANNEL.sendToServer(new Interact(targetId)); }
+    public static void interact(int targetId, boolean chain) { CHANNEL.sendToServer(new Interact(targetId, chain)); }
 
-    public record Interact(int targetId) {
-        static void encode(Interact value, FriendlyByteBuf buf) { buf.writeVarInt(value.targetId); }
-        static Interact decode(FriendlyByteBuf buf) { return new Interact(buf.readVarInt()); }
+    public record Interact(int targetId, boolean chain) {
+        static void encode(Interact value, FriendlyByteBuf buf) { buf.writeVarInt(value.targetId); buf.writeBoolean(value.chain); }
+        static Interact decode(FriendlyByteBuf buf) { return new Interact(buf.readVarInt(), buf.readBoolean()); }
         static void handle(Interact value, Supplier<NetworkEvent.Context> supplier) {
             var context = supplier.get();
             context.enqueueWork(() -> {
                 var sender = context.getSender();
                 if (sender != null && sender.level().getEntity(value.targetId) instanceof Player target) {
-                    AxolotlStackService.tryStack(sender, target);
+                    if (value.chain) AxolotlStackService.tryChain(sender, target);
+                    else AxolotlStackService.tryStack(sender, target);
                 }
             });
             context.setPacketHandled(true);

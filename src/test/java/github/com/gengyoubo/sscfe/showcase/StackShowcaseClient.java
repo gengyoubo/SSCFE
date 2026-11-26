@@ -40,8 +40,23 @@ public final class StackShowcaseClient {
             {180.0, 1.4, 1.0, "back-3"}, {180.0, 1.4, 1.0, "back-4"}, {180.0, 1.4, 1.0, "back-5"},
             {180.0, 1.4, 1.0, "back-6"}, {180.0, 1.4, 1.0, "back-7"},
     };
+    /**
+     * Chain scenario: {..., target} where target 0 frames the whole chain and 1 the first link.
+     * Shots named "drag-" are taken while the head crawls forward (the client starts it).
+     */
+    private static final Object[][] CHAIN_SHOTS = {
+            {90.0, 6.0, 1.6, "side", 0}, {150.0, 5.5, 2.2, "rear-quarter", 0}, {90.0, 2.4, 0.5, "link-side", 1},
+            {35.0, 2.6, 1.0, "link-front", 1}, {90.0, 3.0, 4.0, "top", 0}, {90.0, 0.3, 2.6, "link-top", 1},
+            {90.0, 6.0, 1.6, "drag-side", 0}, {150.0, 5.0, 2.0, "drag-rear-quarter", 0},
+            {90.0, 2.6, 0.5, "drag-link-side", 1}, {90.0, 3.0, 4.0, "drag-top", 0},
+            // The head keeps crawling and turns; seen from above, every joint should stay within the tail angle.
+            {90.0, 0.5, 10.0, "turn-top-0", 0}, {90.0, 0.5, 10.0, "turn-top-1", 0},
+            {90.0, 0.5, 10.0, "turn-top-2", 0}, {90.0, 0.5, 10.0, "turn-top-3", 0},
+            {150.0, 6.0, 3.0, "turn-quarter", 0},
+    };
+    private static final Object[][] ACTIVE_SHOTS = StackShowcaseServer.CHAIN ? CHAIN_SHOTS : SHOTS;
     private static int shotDuration(int shot) {
-        return ((String) SHOTS[shot][3]).startsWith("back-") ? 6 : 20;
+        return ((String) ACTIVE_SHOTS[shot][3]).startsWith("back-") ? 6 : 20;
     }
     private static boolean worldRequested;
     private static int readyTicks = -1, worldTicks;
@@ -99,8 +114,8 @@ public final class StackShowcaseClient {
         int phase = readyTicks - 80;
         if (phase < 0) return;
         int shot = 0, step = phase;
-        while (shot < SHOTS.length && step >= shotDuration(shot)) step -= shotDuration(shot++);
-        if (shot >= SHOTS.length) {
+        while (shot < ACTIVE_SHOTS.length && step >= shotDuration(shot)) step -= shotDuration(shot++);
+        if (shot >= ACTIVE_SHOTS.length) {
             if (soloPhase) {
                 soloPhase = false;
                 readyTicks = -1;
@@ -110,8 +125,18 @@ public final class StackShowcaseClient {
             }
             return;
         }
-        if (step == 0) frame(mc, stack.get(0), SHOTS[shot]);
-        if (step == shotDuration(shot) - 5 + (shotDuration(shot) == 6 ? 4 : 0)) shoot(mc, (soloPhase ? "solo-" : "") + SHOTS[shot][3]);
+        if (StackShowcaseServer.CHAIN && step == 0 && ((String) ACTIVE_SHOTS[shot][3]).startsWith("drag-")
+                && StackShowcaseServer.headSpeed == 0) {
+            StackShowcaseServer.headSpeed = 0.09D;
+        }
+        if (StackShowcaseServer.CHAIN && step == 0 && ((String) ACTIVE_SHOTS[shot][3]).startsWith("turn-")
+                && StackShowcaseServer.headTurn == 0) {
+            StackShowcaseServer.headTurn = 3.5F;
+        }
+        if (StackShowcaseServer.CHAIN && step == shotDuration(shot) - 5) logChain(stack, (String) ACTIVE_SHOTS[shot][3]);
+        if (StackShowcaseServer.CHAIN) frameChain(mc, stack, ACTIVE_SHOTS[shot]);
+        else if (step == 0) frame(mc, stack.get(0), ACTIVE_SHOTS[shot]);
+        if (step == shotDuration(shot) - 5 + (shotDuration(shot) == 6 ? 4 : 0)) shoot(mc, (soloPhase ? "solo-" : "") + ACTIVE_SHOTS[shot][3]);
     }
 
     private static String f(double value) {
@@ -145,6 +170,35 @@ public final class StackShowcaseClient {
         float pitch = (float) -Math.toDegrees(Math.atan2(look.y, look.horizontalDistance()));
         mc.player.moveTo(eye.x, eye.y - mc.player.getEyeHeight(), eye.z, yaw, pitch);
         mc.player.setYHeadRot(yaw);
+    }
+
+    /** Re-framed every tick so moving chains stay in view; aims at the chain or its first link. */
+    private static void frameChain(Minecraft mc, List<Player> chain, Object[] shot) {
+        Player head = chain.get(0);
+        Player end = (int) shot[4] == 1 ? chain.get(1) : chain.get(chain.size() - 1);
+        Vec3 target = head.position().add(end.position()).scale(0.5D).add(0, 0.3D, 0);
+        // A fixed reference (the head's starting yaw) keeps turning shots comparable.
+        double around = Math.toRadians(90.0D + (double) shot[0]);
+        double distance = (double) shot[1], height = (double) shot[2];
+        Vec3 eye = target.add(-Math.sin(around) * distance, height, Math.cos(around) * distance);
+        Vec3 look = target.subtract(eye);
+        float yaw = (float) Math.toDegrees(Math.atan2(-look.x, look.z));
+        float pitch = (float) -Math.toDegrees(Math.atan2(look.y, look.horizontalDistance()));
+        mc.player.moveTo(eye.x, eye.y - mc.player.getEyeHeight(), eye.z, yaw, pitch);
+        mc.player.setYHeadRot(yaw);
+    }
+
+    private static void logChain(List<Player> chain, String shot) {
+        StringBuilder line = new StringBuilder("[stack-showcase] chain ").append(shot);
+        for (int i = 1; i < chain.size(); i++) {
+            Player front = chain.get(i - 1), follower = chain.get(i);
+            double dx = follower.getX() - front.getX(), dz = follower.getZ() - front.getZ();
+            double yaw = Math.toRadians(front.yBodyRot), backX = Math.sin(yaw), backZ = -Math.cos(yaw);
+            double angle = Math.toDegrees(Math.atan2(backX * dz - backZ * dx, backX * dx + backZ * dz));
+            line.append(String.format(" link%d=%.3f dy=%.3f angle=%.1f", i, Math.sqrt(dx * dx + dz * dz),
+                    follower.getY() - front.getY(), angle));
+        }
+        LOGGER.info(line.toString());
     }
 
     private static void shoot(Minecraft mc, String name) {
