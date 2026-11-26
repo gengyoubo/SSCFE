@@ -32,7 +32,7 @@ public final class FloatingMoondustRecipe extends CustomRecipe {
             } else if (stack.is(Items.POTION) && !foundPotion) {
                 foundPotion = true;
                 minutes = PotionUtils.getMobEffects(stack).stream()
-                        .filter(effect -> effect.getEffect() == MobEffects.SLOW_FALLING)
+                        .filter(effect -> effect.getEffect() == MobEffects.LEVITATION)
                         .mapToInt(effect -> effect.getDuration() / 1200)
                         .max().orElse(0);
             } else {

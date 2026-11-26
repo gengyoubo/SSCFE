@@ -3,6 +3,10 @@ package github.com.gengyoubo.sscfe.moon;
 import com.mojang.authlib.GameProfile;
 import github.com.gengyoubo.sscfe.Sscfe;
 import github.com.gengyoubo.sscfe.init.ModMoonContent;
+import github.com.gengyoubo.sscfe.init.ModPotionContent;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
+import net.minecraftforge.common.brewing.BrewingRecipeRegistry;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -71,21 +75,36 @@ public final class MoonFeatureGameTests {
     public static void floatingMoondustRecipe(GameTestHelper helper) {
         var grid = grid();
         CraftingRecipe recipe = recipe(helper, "floating_moondust");
-        grid.setItem(4, PotionUtils.setPotion(new ItemStack(Items.POTION), Potions.SLOW_FALLING));
+        ItemStack shortPotion = PotionUtils.setCustomEffects(new ItemStack(Items.POTION),
+                java.util.List.of(new MobEffectInstance(MobEffects.LEVITATION, 20 * 90)));
+        grid.setItem(4, shortPotion);
         grid.setItem(8, new ItemStack(ModItems.UNTREATED_MOONDUST.get(), 12));
-        helper.assertTrue(recipe.matches(grid, helper.getLevel()), "90 seconds requires one dust slot");
+        helper.assertTrue(recipe.matches(grid, helper.getLevel()), "90 seconds of levitation requires one dust slot");
         helper.assertTrue(recipe.assemble(grid, helper.getLevel().registryAccess()).getCount() == 1,
                 "90 seconds produces one dust");
         helper.assertTrue(recipe.getRemainingItems(grid).get(4).is(Items.GLASS_BOTTLE), "Potion returns a bottle");
-        grid.setItem(4, PotionUtils.setPotion(new ItemStack(Items.POTION), Potions.LONG_SLOW_FALLING));
-        helper.assertTrue(!recipe.matches(grid, helper.getLevel()), "A stack in one slot cannot supply four ingredients");
-        for (int i = 0; i < 3; i++) grid.setItem(i, new ItemStack(ModItems.UNTREATED_MOONDUST.get()));
-        helper.assertTrue(recipe.matches(grid, helper.getLevel()), "Four-minute potion accepts four dust slots");
+        grid.setItem(4, PotionUtils.setPotion(new ItemStack(Items.POTION), Potions.SLOW_FALLING));
+        helper.assertTrue(!recipe.matches(grid, helper.getLevel()), "Slow falling cannot replace levitation");
+        grid.setItem(4, PotionUtils.setPotion(new ItemStack(Items.POTION), ModPotionContent.LEVITATION.get()));
+        helper.assertTrue(!recipe.matches(grid, helper.getLevel()), "A stack in one slot cannot supply three ingredients");
+        grid.setItem(0, new ItemStack(ModItems.UNTREATED_MOONDUST.get()));
+        grid.setItem(1, new ItemStack(ModItems.UNTREATED_MOONDUST.get()));
+        helper.assertTrue(recipe.matches(grid, helper.getLevel())
+                && recipe.assemble(grid, helper.getLevel().registryAccess()).getCount() == 3, "Three-minute potion produces three dust");
+        for (int i = 0; i < 9; i++) if (i != 4) grid.setItem(i, new ItemStack(ModItems.UNTREATED_MOONDUST.get()));
+        grid.setItem(4, PotionUtils.setPotion(new ItemStack(Items.POTION), ModPotionContent.LONG_LEVITATION.get()));
         ItemStack output = recipe.assemble(grid, helper.getLevel().registryAccess());
-        helper.assertTrue(output.is(ModMoonContent.FLOATING_MOONDUST.get()) && output.getCount() == 4,
-                "Four-minute potion produces four floating dust");
-        grid.setItem(7, new ItemStack(Items.APPLE));
-        helper.assertTrue(!recipe.matches(grid, helper.getLevel()), "Unrelated items invalidate recipe");
+        helper.assertTrue(recipe.matches(grid, helper.getLevel()) && output.is(ModMoonContent.FLOATING_MOONDUST.get())
+                && output.getCount() == 8, "Eight-minute potion produces eight floating dust");
+        for (Item container : new Item[]{Items.POTION, Items.SPLASH_POTION, Items.LINGERING_POTION}) {
+            ItemStack potion = PotionUtils.setPotion(new ItemStack(container), ModPotionContent.LEVITATION.get());
+            ItemStack extended = BrewingRecipeRegistry.getOutput(potion, new ItemStack(Items.REDSTONE));
+            helper.assertTrue(extended.is(container) && PotionUtils.getPotion(extended) == ModPotionContent.LONG_LEVITATION.get()
+                    && PotionUtils.getMobEffects(extended).get(0).getDuration() == 20 * 60 * 8,
+                    "Redstone extends levitation to eight minutes for each bottle type");
+            helper.assertTrue(BrewingRecipeRegistry.getOutput(extended, new ItemStack(Items.REDSTONE)).isEmpty(),
+                    "Extended potion cannot be extended again");
+        }
         helper.succeed();
     }
 

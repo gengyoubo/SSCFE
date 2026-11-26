@@ -22,6 +22,9 @@ public final class ModPotionContent {
     public static final RegistryObject<Potion> LEVITATION = POTIONS.register("levitation",
             () -> new Potion(new MobEffectInstance(MobEffects.LEVITATION, 20 * 60 * 3)));
 
+    public static final RegistryObject<Potion> LONG_LEVITATION = POTIONS.register("long_levitation",
+            () -> new Potion("levitation", new MobEffectInstance(MobEffects.LEVITATION, 20 * 60 * 8)));
+
     private ModPotionContent() {}
 
     public static void register(IEventBus bus) {
@@ -30,9 +33,17 @@ public final class ModPotionContent {
     }
 
     private static void setup(FMLCommonSetupEvent event) {
-        event.enqueueWork(() -> BrewingRecipeRegistry.addRecipe(
-                StrictNBTIngredient.of(PotionUtils.setPotion(new ItemStack(Items.POTION), Potions.AWKWARD)),
-                Ingredient.of(Items.SHULKER_SHELL),
-                PotionUtils.setPotion(new ItemStack(Items.POTION), LEVITATION.get())));
+        event.enqueueWork(() -> {
+            BrewingRecipeRegistry.addRecipe(
+                    StrictNBTIngredient.of(PotionUtils.setPotion(new ItemStack(Items.POTION), Potions.AWKWARD)),
+                    Ingredient.of(Items.SHULKER_SHELL),
+                    PotionUtils.setPotion(new ItemStack(Items.POTION), LEVITATION.get()));
+            for (var container : new net.minecraft.world.item.Item[]{Items.POTION, Items.SPLASH_POTION, Items.LINGERING_POTION}) {
+                BrewingRecipeRegistry.addRecipe(
+                        StrictNBTIngredient.of(PotionUtils.setPotion(new ItemStack(container), LEVITATION.get())),
+                        Ingredient.of(Items.REDSTONE),
+                        PotionUtils.setPotion(new ItemStack(container), LONG_LEVITATION.get()));
+            }
+        });
     }
 }
